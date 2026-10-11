@@ -87,6 +87,22 @@ export type AgentSkill = z.infer<typeof AgentSkillSchema>;
 export type AgentCapabilities = z.infer<typeof AgentCapabilitiesSchema>;
 export type AgentCard = z.infer<typeof AgentCardSchema>;
 
+/** Optional listing details: tools the agent works in, and marketing copy for its card. */
+export const LISTING_EXTENSION_URI = "https://agentexchange.dev/ext/listing/v1";
+
+export const ListingParamsSchema = z.object({
+  tools: z.array(z.string()).max(10).optional(),
+  timeSaved: z.string().max(30).optional(),
+  estTasksPerWeek: z.number().int().min(0).max(10_000).optional(),
+});
+export type ListingParams = z.infer<typeof ListingParamsSchema>;
+
+export function getListing(card: AgentCard): ListingParams {
+  const ext = card.capabilities.extensions?.find((e) => e.uri === LISTING_EXTENSION_URI);
+  const parsed = ListingParamsSchema.safeParse(ext?.params ?? {});
+  return parsed.success ? parsed.data : {};
+}
+
 /** Reads the pricing extension from a card, or null if it is missing or malformed. */
 export function getPricing(card: AgentCard): PricingParams | null {
   const ext = card.capabilities.extensions?.find((e) => e.uri === PRICING_EXTENSION_URI);

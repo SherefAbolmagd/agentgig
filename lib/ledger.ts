@@ -2,7 +2,7 @@ import "server-only";
 import { FieldValue, type Transaction } from "firebase-admin/firestore";
 import { db } from "./firebase-admin";
 import { GatewayError } from "./errors";
-import { COLLECTIONS, type TaskDoc, type TokenTransactionDoc, type UserDoc } from "@/types/firestore";
+import { COLLECTIONS, type HireDoc, type TaskDoc, type TokenTransactionDoc, type UserDoc } from "@/types/firestore";
 
 /**
  * The token ledger. Tokens move in two steps so that neither failures nor
@@ -19,6 +19,12 @@ import { COLLECTIONS, type TaskDoc, type TokenTransactionDoc, type UserDoc } fro
 const users = () => db().collection(COLLECTIONS.users);
 const tasks = () => db().collection(COLLECTIONS.tasks);
 const txns = () => db().collection(COLLECTIONS.tokenTransactions);
+const hires = () => db().collection(COLLECTIONS.hires);
+
+/** Calendar month (UTC) that monthly spending caps count against, e.g. "2026-10". */
+export function spendPeriod(at = new Date()): string {
+  return at.toISOString().slice(0, 7);
+}
 
 export interface ReserveRequest {
   userId: string;
@@ -45,7 +51,12 @@ export async function reserveTokens(req: ReserveRequest): Promise<{ taskId: stri
   const taskRef = req.idempotencyKey ? tasks().doc(`${req.userId}_${req.idempotencyKey}`) : tasks().doc();
 
   return ledgerTransaction(async (tx) => {
-    const [userSnap, existing] = await Promise.all([tx.get(users().doc(req.userId)), tx.get(taskRef)]);
+    const hireRef = req.hireId ? hires().doc(req.hireId) : null;
+    const [userSnap, existing, hireSnap] = await Promise.all([
+      tx.get(users().doc(req.userId)),
+      tx.get(taskRef),
+      hireRef ? tx.get(hireRef) : Promise.resolve(null),
+    ]);
     if (!userSnap.exists) throw new GatewayError("USER_NOT_FOUND", "We couldn't find your account.");
     const user = userSnap.data() as UserDoc;
 
@@ -58,6 +69,19 @@ export async function reserveTokens(req: ReserveRequest): Promise<{ taskId: stri
         { needed: req.cost, balance: user.tokenBalance },
       );
     }
+
+    // Monthly spending cap for this agent, counted in the same transaction.
+    const hire = hireSnap?.data() as HireDoc | undefined;
+    const period = spendPeriod();
+    const spent = hire?.spend?.period === period ? hire.spend.tokens : 0;
+    if (hire && hire.monthlyCapTokens != null && spent + req.cost > hire.monthlyCapTokens) {
+      throw new GatewayError(
+        "CAP_REACHED",
+        `${req.agentName} has used ${spent} of its ${hire.monthlyCapTokens}-token monthly limit. Raise the limit in its settings to keep it working.`,
+        { spent, cap: hire.monthlyCapTokens },
+      );
+    }
+    if (hireRef && hire) tx.update(hireRef, { spend: { period, tokens: spent + req.cost } });
 
     const balanceAfter = user.tokenBalance - req.cost;
     tx.update(users().doc(req.userId), {
@@ -73,6 +97,7 @@ export async function reserveTokens(req: ReserveRequest): Promise<{ taskId: stri
       origin: req.origin,
       status: "reserved",
       cost: req.cost,
+      spendPeriod: period,
       input: req.input,
       dlpFindings: [],
       steps: [],
@@ -106,7 +131,9 @@ export async function settleTask(
     if (!taskSnap.exists) throw new GatewayError("TASK_NOT_FOUND", `Task ${taskId} does not exist.`);
     const task = taskSnap.data() as TaskDoc;
     const userRef = users().doc(task.userId);
-    const user = (await tx.get(userRef)).data() as UserDoc;
+    const hireRef = task.hireId ? hires().doc(task.hireId) : null;
+    const [userSnap, hireSnap] = await Promise.all([tx.get(userRef), hireRef ? tx.get(hireRef) : Promise.resolve(null)]);
+    const user = userSnap.data() as UserDoc;
 
     if (task.settlement) return { balance: user.tokenBalance };
 
@@ -119,6 +146,11 @@ export async function settleTask(
         : { tokenBalance: FieldValue.increment(task.cost) }),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    // A released task no longer counts towards the agent's monthly cap.
+    const hire = hireSnap?.data() as HireDoc | undefined;
+    if (!charge && hireRef && hire?.spend && hire.spend.period === task.spendPeriod) {
+      tx.update(hireRef, { "spend.tokens": Math.max(0, hire.spend.tokens - task.cost) });
+    }
     tx.update(taskSnap.ref, {
       settlement: charge ? "charged" : "released",
       updatedAt: FieldValue.serverTimestamp(),

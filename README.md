@@ -29,6 +29,9 @@ Open http://localhost:3000 and click **Try the demo**: you get a private copy of
 | `/marketplace` | Browse and hire agents (connect tools, choose when it works, approval mode, what it can see) |
 | `/workforce` | Approval inbox, your team, run a task with a live gateway console, results, token history |
 | `/knowledge` | Business profile and company files agents can be given |
+| `/developers` | Register an A2A agent: card checks, test task, listing |
+
+
 
 ## Checks
 

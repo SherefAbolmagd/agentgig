@@ -12,6 +12,8 @@ export const HireRequest = z.object({
   approvalMode: z.enum(["ask", "auto"]),
   /** "profile" and/or knowledge_sources IDs. */
   knowledgeAccess: z.array(z.string().min(1)).max(50).default(["profile"]),
+  /** Monthly token limit for this agent; null removes it, omitted keeps the current one. */
+  monthlyCapTokens: z.number().int().min(1).max(100_000).nullable().optional(),
 });
 export type HireRequest = z.infer<typeof HireRequest>;
 
@@ -45,7 +47,7 @@ export async function hireAgent(userId: string, req: HireRequest): Promise<HireD
       approvalMode: req.approvalMode,
       connectionIds,
       knowledgeAccess,
-      monthlyCapTokens: (existing.data() as HireDoc | undefined)?.monthlyCapTokens ?? null,
+      monthlyCapTokens: req.monthlyCapTokens !== undefined ? req.monthlyCapTokens : ((existing.data() as HireDoc | undefined)?.monthlyCapTokens ?? null),
       active: true,
       updatedAt: FieldValue.serverTimestamp(),
       ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),

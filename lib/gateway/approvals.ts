@@ -2,9 +2,10 @@ import "server-only";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { NATIVE_AGENTS } from "@/lib/agents";
+import { partnerAgent } from "@/lib/agents/partner";
 import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
-import { COLLECTIONS, type ApprovalDoc, type TaskDoc } from "@/types/firestore";
+import { COLLECTIONS, type AgentDoc, type ApprovalDoc, type TaskDoc } from "@/types/firestore";
 
 export const ApprovalDecision = z.object({
   action: z.enum(["approve", "skip"]),
@@ -63,7 +64,8 @@ export async function resolveApproval(userId: string, approvalId: string, decisi
     await approvalRef.update({ editedOutput: output });
   }
 
-  const handler = NATIVE_AGENTS[task.agentId];
+  const agentDoc = (await store.collection(COLLECTIONS.agents).doc(task.agentId).get()).data() as AgentDoc | undefined;
+  const handler = NATIVE_AGENTS[task.agentId] ?? (agentDoc?.endpointUrl ? partnerAgent(agentDoc) : undefined);
   if (!handler) throw new GatewayError("AGENT_UNAVAILABLE", "This agent can't deliver results yet.");
   const delivery = await handler.deliver(output, { userId, taskId: approval.taskId });
   await taskRef.update({ status: "delivered", output, delivery, updatedAt: FieldValue.serverTimestamp() });

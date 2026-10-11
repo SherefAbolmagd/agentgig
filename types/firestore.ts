@@ -94,6 +94,11 @@ export interface AgentDoc {
   taskCount: number;
   status: "pending" | "listed" | "suspended";
   listedAt: Ts;
+  /** A2A listings: who registered it, and how the gateway authenticates to it. */
+  ownerUid?: string;
+  auth?: { type: "apiKey"; header: string; secretRef: string } | null;
+  version?: string;
+  protocolVersion?: string;
 }
 
 /* ---------- hires/{uid}_{slug} ---------- */
@@ -108,6 +113,8 @@ export interface HireDoc {
   knowledgeAccess: string[];
   /** Max tokens this agent may spend per calendar month; null = no cap. */
   monthlyCapTokens: number | null;
+  /** Tokens held or charged this month, for the cap. Written only by lib/ledger.ts. */
+  spend?: { period: string; tokens: number };
   active: boolean;
   createdAt: Ts;
   updatedAt: Ts;
@@ -163,6 +170,8 @@ export interface TaskDoc {
   cost: number;
   /** Set once by lib/ledger.ts settleTask; makes settling idempotent. */
   settlement?: "charged" | "released";
+  /** Month the task counted against its hire's cap. */
+  spendPeriod?: string;
   /** Stored after scrubbing only. */
   input: Record<string, unknown>;
   output?: Record<string, unknown>;

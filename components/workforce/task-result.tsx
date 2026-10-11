@@ -35,6 +35,10 @@ export function TaskResult({ task, businessName }: { task: Task | null; business
 
       {task.output && task.agentId === "echosocial" && <LinkedInPreview task={task} businessName={businessName} />}
       {task.output && task.agentId === "receipthero" && <InvoiceAudit output={task.output as unknown as Invoice} />}
+      {task.output && Array.isArray(task.output.heldBack) && <VatSummary output={task.output as unknown as Vat} />}
+      {task.output && !["echosocial", "receipthero"].includes(task.agentId) && !Array.isArray(task.output.heldBack) && typeof task.output.summary === "string" && (
+        <p className="rounded-lg border bg-background p-4 text-sm whitespace-pre-line">{task.output.summary}</p>
+      )}
 
       {task.output && (
         <Collapsible>
@@ -187,6 +191,79 @@ function Flag({ tone, icon, title, text }: { tone: "good" | "bad" | "warn" | "in
         <p className="font-semibold">{title}</p>
         <p className="text-foreground/80">{text}</p>
       </div>
+    </div>
+  );
+}
+
+interface VatRow {
+  vendor: string;
+  invoiceNumber: string | null;
+  net: number;
+  vat: number;
+  gross: number;
+  reason: string | null;
+}
+interface Vat {
+  period: string;
+  currency: string;
+  invoiceCount: number;
+  totals: { net: number; vat: number; gross: number };
+  reclaimableVat: number;
+  heldBackVat: number;
+  included: VatRow[];
+  heldBack: VatRow[];
+  accountantNote: string;
+}
+
+function VatSummary({ output: o }: { output: Vat }) {
+  const c = o.currency;
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Figure label="VAT to reclaim" value={money(o.reclaimableVat, c)} tone="good" />
+        <Figure label="VAT held back" value={money(o.heldBackVat, c)} tone={o.heldBack.length ? "bad" : "neutral"} />
+        <Figure label="Invoices" value={`${o.included.length} in · ${o.heldBack.length} held`} tone="neutral" />
+      </div>
+      <blockquote className="rounded-lg border-l-4 border-primary bg-secondary px-4 py-3 text-sm">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Note for your accountant · {o.period}</p>
+        {o.accountantNote}
+      </blockquote>
+      {o.invoiceCount > 0 && (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Supplier</TableHead>
+                <TableHead className="text-right">Net</TableHead>
+                <TableHead className="text-right">VAT</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...o.included, ...o.heldBack].map((r, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    {r.vendor}
+                    {r.invoiceNumber && <span className="block font-mono text-xs text-muted-foreground">{r.invoiceNumber}</span>}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-[13px]">{money(r.net, c)}</TableCell>
+                  <TableCell className="text-right font-mono text-[13px]">{money(r.vat, c)}</TableCell>
+                  <TableCell className={cn("max-w-64 whitespace-normal text-xs", r.reason ? "text-destructive" : "text-primary")}>{r.reason ?? "Ready to claim"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Figure({ label, value, tone }: { label: string; value: string; tone: "good" | "bad" | "neutral" }) {
+  return (
+    <div className="rounded-lg border px-3 py-2.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={cn("font-mono text-lg font-medium", tone === "good" && "text-primary", tone === "bad" && "text-destructive")}>{value}</p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { FieldValue, Timestamp, type DocumentReference } from "firebase-admin/firestore";
 import { z } from "zod";
 import { NATIVE_AGENTS, type AnyNativeAgent, type UploadedFile } from "@/lib/agents";
+import { partnerAgent } from "@/lib/agents/partner";
 import { mergeFindings, scrubFile, scrubText } from "@/lib/dlp";
 import { GatewayError, isGatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
@@ -64,7 +65,7 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
       idempotencyKey: req.idempotencyKey,
     }));
   } catch (err) {
-    if (isGatewayError(err) && err.code === "INSUFFICIENT_TOKENS") await recordRejected(req, agent, handler, err);
+    if (isGatewayError(err) && (err.code === "INSUFFICIENT_TOKENS" || err.code === "CAP_REACHED")) await recordRejected(req, agent, handler, err);
     throw err;
   }
   const taskRef = db().collection(COLLECTIONS.tasks).doc(taskId);
@@ -103,7 +104,9 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
     await taskRef.update({ status: "running", updatedAt: FieldValue.serverTimestamp() });
     const result = await handler.run({ taskId, userId: req.userId, input: cleanInput, files, grounding });
     output = result.output;
-    await log("run", "ok", `${result.model} answered in ${(result.latencyMs / 1000).toFixed(1)}s (${result.usage.outputTokens} output tokens)`);
+    for (const note of result.notes ?? []) await log("run", "ok", note);
+    const tokens = result.usage.outputTokens ? ` (${result.usage.outputTokens} output tokens)` : "";
+    await log("run", "ok", `${result.model} answered in ${(result.latencyMs / 1000).toFixed(1)}s${tokens}`);
   } catch (err) {
     const failure = isGatewayError(err)
       ? err
@@ -154,7 +157,8 @@ async function verify(req: RunTaskRequest) {
   const hire = hireSnap.data() as HireDoc | undefined;
   if (!hire?.active) throw new GatewayError("NOT_HIRED", `Hire ${agent.name} from the marketplace before giving it tasks.`);
 
-  const handler = agent.source === "native" ? NATIVE_AGENTS[agent.slug] : undefined;
+  const handler =
+    agent.source === "native" ? NATIVE_AGENTS[agent.slug] : agent.endpointUrl ? partnerAgent(agent, req.rawInput) : undefined;
   if (!handler) {
     throw new GatewayError("AGENT_UNAVAILABLE", `${agent.name} is a preview listing and can't take tasks yet.`);
   }

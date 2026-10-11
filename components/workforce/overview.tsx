@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toDate } from "@/lib/client/format";
 import type { WithId } from "@/lib/client/firestore";
 import { cn } from "@/lib/utils";
 import type { HireDoc, TaskDoc, UserDoc } from "@/types/firestore";
+
+const LOW_BALANCE = 20;
 
 interface Props {
   me: UserDoc | null;
@@ -30,6 +32,14 @@ export function Overview({ me, hires, tasks, openApprovals }: Props) {
 
   return (
     <div className="grid gap-4">
+      {me && me.tokenBalance < LOW_BALANCE && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-xl border border-destructive/40 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="size-4 shrink-0" />
+          <span>
+            <b>{me.tokenBalance} tokens left.</b> Your agents stop when they can&apos;t cover a task. Use <b>+ 500</b> in the top bar to top up.
+          </span>
+        </div>
+      )}
       {done < steps.length && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border bg-card px-4 py-3">
           <div className="min-w-36">

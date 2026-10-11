@@ -35,7 +35,11 @@ export interface AgentRunContext<I> {
   grounding: Grounding;
 }
 
-export type AgentRunResult<O> = Omit<GenerateJsonResult<unknown>, "data"> & { output: O };
+export type AgentRunResult<O> = Omit<GenerateJsonResult<unknown>, "data"> & {
+  output: O;
+  /** Extra lines for the task log, e.g. what was handed over from another agent. */
+  notes?: string[];
+};
 
 export type ApprovalDraft = Pick<ApprovalDoc, "title" | "preview" | "severity"> & { actions: ApprovalAction[] };
 

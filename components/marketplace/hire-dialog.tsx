@@ -7,6 +7,7 @@ import { AgentAvatar } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { api, ApiError } from "@/lib/client/api";
@@ -30,6 +31,7 @@ export function HireDialog({ agent, existing, onClose }: Props) {
   const [approvalMode, setApprovalMode] = useState<"ask" | "auto">("ask");
   const [access, setAccess] = useState<Set<string>>(new Set(["profile"]));
   const [saving, setSaving] = useState(false);
+  const [cap, setCap] = useState("");
 
   useEffect(() => {
     if (!agent) return;
@@ -37,6 +39,7 @@ export function HireDialog({ agent, existing, onClose }: Props) {
     setApprovalMode(existing?.approvalMode ?? (agent.category === "Finance" ? "auto" : "ask"));
     setAccess(new Set(existing?.knowledgeAccess ?? ["profile"]));
     setConnected(new Set(existing ? agent.tools : []));
+    setCap(existing?.monthlyCapTokens ? String(existing.monthlyCapTokens) : "");
   }, [agent, existing]);
 
   if (!agent) return null;
@@ -54,7 +57,7 @@ export function HireDialog({ agent, existing, onClose }: Props) {
     if (!agent) return;
     setSaving(true);
     try {
-      await api("/api/hires", { json: { agentId: agent.slug, triggerId, approvalMode, knowledgeAccess: [...access] } });
+      await api("/api/hires", { json: { agentId: agent.slug, triggerId, approvalMode, knowledgeAccess: [...access], monthlyCapTokens: cap ? Number(cap) : null } });
       toast.success(existing ? `${agent.name}'s settings are saved.` : `${agent.name} joined your team.`, {
         action: { label: "Give it a task", onClick: () => router.push(`/workforce?agent=${agent.slug}`) },
       });
@@ -141,6 +144,27 @@ export function HireDialog({ agent, existing, onClose }: Props) {
             ))}
           </Step>
 
+          <Step n={5} title="Monthly spending limit">
+            <div className="flex items-center gap-2">
+              <Input
+                id="cap"
+                type="number"
+                inputMode="numeric"
+                min={agent.tokensPerTask}
+                step={1}
+                value={cap}
+                onChange={(e) => setCap(e.target.value)}
+                placeholder="No limit"
+                className="w-36 font-mono"
+                aria-label="Monthly token limit"
+              />
+              <span className="text-sm text-muted-foreground">tokens a month</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Optional. {agent.name} stops and tells you when it reaches the limit. About {agent.estTasksPerWeek * agent.tokensPerTask * 5} covers a typical month.
+            </p>
+          </Step>
+
           <div className="flex flex-wrap justify-between gap-2 rounded-lg bg-token-soft px-4 py-3 text-sm text-token">
             <span>Estimate: about {agent.estTasksPerWeek} tasks a week</span>
             <span className="font-mono font-medium">≈ {agent.estTasksPerWeek * agent.tokensPerTask} tokens/week</span>
@@ -151,7 +175,7 @@ export function HireDialog({ agent, existing, onClose }: Props) {
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={!allConnected || !triggerId || saving}>
+          <Button onClick={save} disabled={!allConnected || !triggerId || saving || (cap !== "" && Number(cap) < agent.tokensPerTask)}>
             {saving && <Loader2 className="animate-spin" />}
             {existing ? "Save settings" : `Hire ${agent.name}`}
           </Button>

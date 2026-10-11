@@ -61,11 +61,17 @@ async function main() {
       await shot(page, "echosocial-done");
     });
 
-    await step("Approving the draft delivers it", async () => {
-      await page.getByRole("button", { name: "Approve & schedule" }).click();
+    await step("Editing then approving the draft delivers the owner's version", async () => {
+      await page.getByRole("button", { name: "Edit first" }).click();
+      const box = page.getByRole("textbox", { name: "Post text" });
+      await box.waitFor();
+      await page.waitForFunction(() => (document.querySelector("textarea[aria-label='Post text']") as HTMLTextAreaElement)?.value.length > 50);
+      await box.fill("Manchester offices: fresh coffee, delivered weekly. Your first tasting box is on us. #Manchester #OfficeCoffee");
+      await page.getByRole("button", { name: "Approve my version" }).click();
       await page.getByText(/You're all caught up/).waitFor({ timeout: 30_000 });
-      await page.getByText(/You approved/).waitFor({ timeout: 15_000 });
-      await shot(page, "approved");
+      await page.getByText(/You approved your edited version/).waitFor({ timeout: 15_000 });
+      await page.getByText("Edited by you · EchoSocial will learn from it").waitFor();
+      await shot(page, "approved-edited");
     });
 
     await step("ReceiptHero audits the sample invoice", async () => {
@@ -77,9 +83,31 @@ async function main() {
       await shot(page, "receipthero-done");
     });
 
-    await step("balance reflects both charges", async () => {
+    await step("hiring the partner VAT Reconciler with a monthly limit", async () => {
+      await page.getByRole("link", { name: "Marketplace" }).click();
+      const card = page.locator("article", { hasText: "VAT Reconciler" });
+      await card.getByRole("button", { name: "Hire VAT" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Sign in" }).click();
+      await dialog.getByText("Connected").waitFor();
+      await dialog.getByLabel("Monthly token limit").fill("30");
+      await shot(page, "hire-wizard");
+      await dialog.getByRole("button", { name: "Hire VAT Reconciler" }).click();
+      await page.getByText("VAT Reconciler joined your team.").waitFor({ timeout: 15_000 });
+    });
+
+    await step("VAT Reconciler receives ReceiptHero's invoices over A2A", async () => {
+      await page.goto(`${BASE}/workforce?agent=vat-reconciler`);
+      await page.getByRole("heading", { name: "Give VAT Reconciler a task" }).waitFor({ timeout: 30_000 });
+      await page.getByRole("button", { name: /Run now · 6 tokens/ }).click();
+      await page.getByText(/Handed 1 invoice audited by ReceiptHero/).waitFor({ timeout: 90_000 });
+      await page.getByText(/Note for your accountant/).waitFor({ timeout: 30_000 });
+      await shot(page, "vat-handoff");
+    });
+
+    await step("balance reflects all three charges", async () => {
       const header = await page.locator("header").first().innerText();
-      if (!/\b305\b/.test(header)) throw new Error(`expected 305 tokens in header, got: ${header.replace(/\s+/g, " ").slice(0, 120)}`);
+      if (!/\b299\b/.test(header)) throw new Error(`expected 299 tokens in header, got: ${header.replace(/\s+/g, " ").slice(0, 120)}`);
     });
 
     await step("marketplace lists all agents", async () => {
@@ -94,7 +122,22 @@ async function main() {
       await page.getByLabel("Business name").waitFor();
       const value = await page.getByLabel("Business name").inputValue();
       if (!value.includes("Café Lumen")) throw new Error(`profile not loaded: "${value}"`);
+      await page.locator("input[type=file]").setInputFiles({
+        name: "faq.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Q: Do you deliver to Salford?\nA: Yes, Tuesdays and Thursdays. Questions: sam.patel@gmail.com\n"),
+      });
+      await page.getByText("faq.txt").first().waitFor({ timeout: 30_000 });
+      await page.getByText("personal data removed").waitFor({ timeout: 15_000 });
       await shot(page, "knowledge");
+    });
+
+    await step("developer portal explains a missing API key", async () => {
+      await page.getByRole("link", { name: "Developers" }).click();
+      await page.getByLabel("Agent Card URL").fill("https://ledgerline-vat-653235000565.us-central1.run.app/.well-known/agent-card.json");
+      await page.getByRole("button", { name: "Check and publish" }).click();
+      await page.getByText(/asks for an API key in the X-API-Key header/).waitFor({ timeout: 30_000 });
+      await shot(page, "developers");
     });
 
     await step("workforce works at phone width", async () => {

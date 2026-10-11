@@ -23,6 +23,7 @@ const NAV = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/workforce", label: "My workforce" },
   { href: "/knowledge", label: "Company knowledge" },
+  { href: "/developers", label: "Developers" },
 ];
 
 export function SiteHeader() {
@@ -85,7 +86,7 @@ function Wallet() {
     <div className="flex items-center gap-2.5 rounded-xl border bg-card py-1 pl-3 pr-1" aria-live="polite">
       <Coin />
       <div className="leading-tight">
-        <div className="font-mono text-lg font-medium tabular-nums">{balance ?? "–"}</div>
+        <div className={cn("font-mono text-lg font-medium tabular-nums", balance !== undefined && balance < 20 && "text-destructive")}>{balance ?? "–"}</div>
         <div className="text-[11px] text-muted-foreground">tokens</div>
       </div>
       <Button size="sm" variant="ghost" className="bg-token-soft text-token hover:bg-token-soft/80 hover:text-token" onClick={buy} disabled={busy || balance === undefined}>

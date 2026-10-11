@@ -84,8 +84,30 @@ async function main() {
     assert.equal(rows.filter((r) => r.type === "charge").length, half, "each task charged once");
 
     console.log(`✓ balance ${u.tokenBalance}, held ${u.tokensHeld}, spent ${u.tokensSpent}; ${rows.length} ledger rows sum to the balance`);
+
+    // Monthly cap: 6 concurrent 1-token tasks against a 3-token cap.
+    const hireId = `${uid}_echosocial`;
+    const hireRef = store.collection(COLLECTIONS.hires).doc(hireId);
+    await hireRef.set({ userId: uid, agentId: "echosocial", monthlyCapTokens: 3, active: true });
+    console.log("Firing 6 concurrent 1-token reservations against a 3-token monthly cap…");
+    const capped = await Promise.allSettled(
+      Array.from({ length: 6 }, (_, i) =>
+        reserveTokens({ userId: uid, agentId: "echosocial", agentName: "EchoSocial", skillId: "linkedin.post", cost: 1, hireId, origin: "manual", input: { cap: i } }),
+      ),
+    );
+    const inCap = capped.flatMap((r) => (r.status === "fulfilled" ? [r.value.taskId] : []));
+    const overCap = capped.filter((r) => r.status === "rejected" && isGatewayError(r.reason) && r.reason.code === "CAP_REACHED").length;
+    console.log(`  reserved ${inCap.length}, stopped by cap ${overCap}`);
+    assert.equal(inCap.length, 3, "exactly the cap gets through");
+    assert.equal(overCap, 3);
+    await settleTask(inCap[0], "release", "test");
+    assert.equal((await hireRef.get()).get("spend.tokens"), 2, "a released task frees its cap");
+    await reserveTokens({ userId: uid, agentId: "echosocial", agentName: "EchoSocial", skillId: "linkedin.post", cost: 1, hireId, origin: "manual", input: {} });
+    assert.equal((await hireRef.get()).get("spend.tokens"), 3);
+    console.log("✓ cap holds under concurrency, and released tasks free it up");
   } finally {
     const batch = store.batch();
+    batch.delete(store.collection(COLLECTIONS.hires).doc(`${uid}_echosocial`));
     for (const c of [COLLECTIONS.tasks, COLLECTIONS.tokenTransactions]) {
       (await store.collection(c).where("userId", "==", uid).get()).docs.forEach((d) => batch.delete(d.ref));
     }

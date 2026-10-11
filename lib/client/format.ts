@@ -6,7 +6,7 @@ export const STATUS: Record<TaskStatus, { label: string; tone: "neutral" | "busy
   running: { label: "Working", tone: "busy" },
   awaiting_approval: { label: "Needs your OK", tone: "attention" },
   delivered: { label: "Done", tone: "good" },
-  rejected: { label: "Not enough tokens", tone: "bad" },
+  rejected: { label: "Not started", tone: "bad" },
   failed: { label: "Failed · refunded", tone: "bad" },
   discarded: { label: "Skipped", tone: "neutral" },
 };

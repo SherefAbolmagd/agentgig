@@ -31,7 +31,8 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const runnable = agent.source === "native";
+  const runnable = agent.source === "native" || !!agent.endpointUrl;
+  const skillId = agent.skills[0]?.id;
 
   async function run(input: Record<string, unknown>, upload?: File) {
     const key = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
@@ -89,7 +90,51 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
         </button>
       </div>
 
-      {!runnable && <p className="text-sm text-muted-foreground">{agent.name} runs on its partner&apos;s servers, which connect in the next release.</p>}
+      {!runnable && <p className="text-sm text-muted-foreground">{agent.name} is a preview listing. Its developer hasn&apos;t connected it yet.</p>}
+
+      {runnable && agent.source === "a2a" && skillId === "vat.summary" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            run({ period: String(new FormData(e.currentTarget).get("period")) });
+          }}
+          className="grid gap-3"
+        >
+          <div className="grid gap-1.5 sm:max-w-xs">
+            <Label htmlFor="period">Period</Label>
+            <Select name="period" defaultValue="this-month">
+              <SelectTrigger id="period" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="this-month">This month</SelectItem>
+                <SelectItem value="last-month">Last month</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
+            <b className="font-medium text-foreground">Agent-to-agent handoff:</b> the invoices ReceiptHero audited in this period are sent to {agent.provider.name}&apos;s agent over
+            A2A, with personal data removed. Invoices ReceiptHero flagged are held back.
+          </p>
+          <RunRow agent={agent} busy={busy} />
+        </form>
+      )}
+
+      {runnable && agent.source === "a2a" && skillId !== "vat.summary" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            run({ request: String(new FormData(e.currentTarget).get("request")) });
+          }}
+          className="grid gap-3"
+        >
+          <div className="grid gap-1.5">
+            <Label htmlFor="request">What should {agent.name} do?</Label>
+            <Textarea id="request" name="request" rows={3} required maxLength={2000} placeholder={agent.skills[0]?.examples?.[0] ?? agent.skills[0]?.description} />
+          </div>
+          <RunRow agent={agent} busy={busy} />
+        </form>
+      )}
 
       {agent.slug === "echosocial" && (
         <form onSubmit={submitEchoSocial} className="grid gap-3">
