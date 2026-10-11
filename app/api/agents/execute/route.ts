@@ -4,6 +4,7 @@ import { getCallerId } from "@/lib/auth";
 import { GatewayError } from "@/lib/errors";
 import { runTask } from "@/lib/gateway/pipeline";
 import { errorResponse, readTaskBody } from "@/lib/http";
+import { consume } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ const AgentId = z.string().regex(/^[a-z0-9-]{2,64}$/);
 export async function POST(req: NextRequest) {
   try {
     const userId = await getCallerId(req);
+    await consume("tasksPerUser", userId);
     const body = await readTaskBody(req);
     const agentId = AgentId.safeParse(body.agentId);
     if (!agentId.success) throw new GatewayError("INVALID_INPUT", "Choose which agent should do this task.");
@@ -47,6 +49,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, req);
   }
 }

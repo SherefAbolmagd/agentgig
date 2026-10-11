@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LogOut, Plus, UserRound } from "lucide-react";
+import { Loader2, LogOut, Plus, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Coin, Logo } from "@/components/brand";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +100,7 @@ function Wallet() {
 function UserMenu() {
   const { user, signOut } = useAuth();
   const me = useMe();
+  const [confirming, setConfirming] = useState(false);
   if (!user) return null;
   const demo = user.isAnonymous;
   return (
@@ -120,7 +122,47 @@ function UserMenu() {
         <DropdownMenuItem onClick={() => signOut()}>
           <LogOut /> {demo ? "Leave the demo" : "Sign out"}
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
+          <Trash2 /> {demo ? "Delete this sandbox" : "Delete my account"}
+        </DropdownMenuItem>
       </DropdownMenuContent>
+      <DeleteAccountDialog open={confirming} demo={demo} onClose={() => setConfirming(false)} onDeleted={signOut} />
     </DropdownMenu>
+  );
+}
+
+function DeleteAccountDialog({ open, demo, onClose, onDeleted }: { open: boolean; demo: boolean; onClose(): void; onDeleted(): Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  async function confirm() {
+    setBusy(true);
+    try {
+      await api("/api/me", { method: "DELETE" });
+      toast.success(demo ? "Sandbox deleted." : "Your account and data are deleted.");
+      await onDeleted();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Deletion failed. Try again.");
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="font-display">{demo ? "Delete this sandbox?" : "Delete your account?"}</DialogTitle>
+          <DialogDescription>
+            This permanently removes your tasks, token history, hired agents, company knowledge files and sign-in. It can&apos;t be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Keep it
+          </Button>
+          <Button variant="destructive" onClick={confirm} disabled={busy}>
+            {busy && <Loader2 className="animate-spin" />} Delete permanently
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

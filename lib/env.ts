@@ -38,6 +38,10 @@ export function env(): ServerEnv {
     if (!parsed.success) {
       throw new Error(`Invalid server environment:\n${z.prettifyError(parsed.error)}`);
     }
+    // K_SERVICE is set by Cloud Run. The demo-header login must never be reachable there.
+    if (parsed.data.DEMO_AUTH && process.env.K_SERVICE) {
+      throw new Error("DEMO_AUTH=true is not allowed on Cloud Run: it lets anyone act as any user.");
+    }
     cached = parsed.data;
   }
   return cached;

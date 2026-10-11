@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck, lint, unit tests
+        run: npm run verify
+        env:
+          GOOGLE_CLOUD_PROJECT: ci
+      - name: Production build
+        run: npm run build
+      - name: Dependency audit (production)
+        run: npm audit --omit=dev --audit-level=high

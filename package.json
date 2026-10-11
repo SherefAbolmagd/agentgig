@@ -13,7 +13,9 @@
     "test:ledger": "tsx --conditions=react-server scripts/test-ledger.ts",
     "smoke": "tsx scripts/smoke.ts",
     "deploy:rules": "tsx scripts/deploy-rules.ts",
-    "e2e": "tsx scripts/e2e.ts"
+    "e2e": "tsx scripts/e2e.ts",
+    "test:ops": "tsx --conditions=react-server scripts/test-ops.ts",
+    "verify": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "@google-cloud/dlp": "^7.1.1",
@@ -52,5 +54,9 @@
     "tsx": "^4.23.15",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6",
+    "postcss": "^8.5.29"
   }
 }

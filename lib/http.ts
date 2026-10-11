@@ -1,12 +1,16 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { GatewayError, isGatewayError } from "./errors";
+import { logError } from "./log";
 import type { UploadedFile } from "./agents";
 
-/** Converts any thrown error into a JSON response. Unknown errors are logged and hidden. */
-export function errorResponse(err: unknown): NextResponse {
-  if (isGatewayError(err)) return NextResponse.json(err.toJSON(), { status: err.status });
-  console.error(err);
+/** Converts any thrown error into a JSON response. Unknown errors are logged (with stack) and hidden. */
+export function errorResponse(err: unknown, req?: Request): NextResponse {
+  if (isGatewayError(err)) {
+    const retry = err.details?.retryAfterSeconds;
+    return NextResponse.json(err.toJSON(), { status: err.status, headers: retry ? { "retry-after": String(retry) } : undefined });
+  }
+  logError(err, req ? { httpRequest: { requestMethod: req.method, requestUrl: new URL(req.url).pathname } } : {});
   return NextResponse.json({ error: { code: "INTERNAL", message: "Something went wrong on our side." } }, { status: 500 });
 }
 
@@ -17,7 +21,7 @@ export function handle<C>(fn: (req: Request, ctx: C) => Promise<unknown>) {
       const body = await fn(req, ctx);
       return body instanceof Response ? body : NextResponse.json(body ?? { ok: true });
     } catch (err) {
-      return errorResponse(err);
+      return errorResponse(err, req);
     }
   };
 }

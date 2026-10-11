@@ -4,6 +4,7 @@ import { Storage } from "@google-cloud/storage";
 import { CronExpressionParser } from "cron-parser";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { env } from "./env";
+import { log as writeLog } from "./log";
 import { db } from "./firebase-admin";
 import { runTask } from "./gateway/pipeline";
 import { isGatewayError } from "./errors";
@@ -101,9 +102,8 @@ export async function runJob(job: Job): Promise<{ status: string }> {
   }
 }
 
-/** One JSON line per event; Cloud Logging turns these into structured entries. */
 function log(message: string, fields: Record<string, unknown>, severity: "INFO" | "WARNING" | "ERROR" = "INFO") {
-  console.log(JSON.stringify({ severity, message, component: "triggers", ...fields }));
+  writeLog(severity, message, { component: "triggers", ...fields });
 }
 
 async function downloadJobFile(f: NonNullable<Job["gcsFile"]>) {

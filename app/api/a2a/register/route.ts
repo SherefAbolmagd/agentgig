@@ -1,6 +1,7 @@
 import { RegisterRequest, registerAgent } from "@/lib/a2a/registry";
 import { getCallerId } from "@/lib/auth";
 import { handle, readJson } from "@/lib/http";
+import { consume } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export const maxDuration = 60;
  */
 export const POST = handle(async (req) => {
   const uid = await getCallerId(req);
+  await consume("registrationsPerUser", uid);
   const result = await registerAgent(uid, await readJson(req, RegisterRequest));
   return { ok: result.ok, checks: result.checks, agent: result.agent, card: result.card };
 });

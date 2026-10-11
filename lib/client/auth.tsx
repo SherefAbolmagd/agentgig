@@ -20,6 +20,8 @@ interface AuthContextValue {
   ready: boolean;
   /** The server has created this user's account (POST /api/me). */
   accountReady: boolean;
+  /** Why the account couldn't be set up (e.g. rate limited), if it failed. */
+  accountError: string | null;
   signInDemo(): Promise<void>;
   signInGoogle(): Promise<void>;
   signInEmail(email: string, password: string): Promise<void>;
@@ -33,17 +35,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [accountUid, setAccountUid] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   useEffect(
     () =>
       onAuthStateChanged(clientAuth, async (u) => {
         setUser(u);
         setReady(true);
+        setAccountError(null);
         if (!u) return setAccountUid(null);
         try {
           await api("/api/me");
-        } finally {
           setAccountUid(u.uid);
+        } catch (err) {
+          setAccountError(err instanceof Error ? err.message : "We couldn't set up your account.");
         }
       }),
     [],
@@ -54,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       ready,
       accountReady: !!user && accountUid === user.uid,
+      accountError,
       async signInDemo() {
         await signInAnonymously(clientAuth);
       },
@@ -72,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await firebaseSignOut(clientAuth);
       },
     }),
-    [user, ready, accountUid],
+    [user, ready, accountUid, accountError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

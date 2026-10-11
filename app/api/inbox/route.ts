@@ -1,6 +1,7 @@
 import { getCallerId } from "@/lib/auth";
 import { GatewayError } from "@/lib/errors";
 import { handle } from "@/lib/http";
+import { consume } from "@/lib/rate-limit";
 import { dropInInbox, isInboxType } from "@/lib/triggers";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
  */
 export const POST = handle(async (req) => {
   const uid = await getCallerId(req);
+  await consume("uploadsPerUser", uid);
   const files = (await req.formData()).getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) throw new GatewayError("INVALID_INPUT", "Choose at least one invoice.");
   if (files.length > MAX_FILES) throw new GatewayError("INVALID_INPUT", `Drop up to ${MAX_FILES} invoices at a time.`);

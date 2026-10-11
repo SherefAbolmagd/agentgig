@@ -89,3 +89,42 @@ Internal endpoints accept only Google-signed OIDC tokens for the app's service a
 ```bash
 gcloud run deploy agentexchange --source . --region us-central1 --project agentexchange-hackathon
 ```
+
+## Production notes
+
+### What is real and what is simulated
+
+| Real | Simulated for the hackathon |
+|---|---|
+| Token ledger, holds, charges, refunds, spending caps | Payment for top-ups (no card is charged; capped at 3 a day per user) |
+| Gemini 2.5 on Vertex AI, Cloud DLP scrubbing | Posting to LinkedIn, filing to Drive, emailing suppliers |
+| A2A registry and partner calls over HTTPS | OAuth connections to third-party tools |
+| Schedules, invoice inbox, Cloud Tasks retries | |
+
+### Security model
+
+- Every API route requires a Firebase ID token. `DEMO_AUTH` (header login for local testing) refuses to start on Cloud Run.
+- Clients can only read their own Firestore documents; all writes go through the API with the Admin SDK.
+- Personal data is removed with Cloud DLP before any agent sees text; partners never receive OAuth tokens or uploaded knowledge files.
+- Outbound calls to developer-supplied URLs are HTTPS-only, refuse private/link-local addresses and don't follow redirects (SSRF guard).
+- Internal endpoints (`/api/triggers/*`, `/api/tasks/run`) accept only Google-signed OIDC tokens for the app's service account.
+- Service accounts are least-privilege; partner API keys live in Secret Manager (custom role `partnerKeyManager`).
+- Security headers and a Content Security Policy on every page; `npm audit` clean for production dependencies.
+
+### Limits and cost controls
+
+Rate limits (Firestore counters with TTL): 30 new demo sandboxes per IP per hour and 500 per day overall; 40 tasks per user per 10 minutes; 40 uploads per user per hour; 10 agent registrations per developer per hour; 3 demo top-ups per user per day. Per-agent monthly token caps are set by owners. Demo sandboxes are deleted after 7 days.
+
+### Operations runbook
+
+| Situation | What to do |
+|---|---|
+| Errors | Cloud Logging, filter `severity>=ERROR` on service `agentexchange`; stack traces also appear in Error Reporting |
+| Trigger problems | Logs with `jsonPayload.component="triggers"` show each inbox event and job phase; `gcloud tasks list --queue agent-tasks --location us-central1` shows retries |
+| A task looks stuck | The 5-minute cron returns held tokens for tasks idle over 15 minutes |
+| Rotate a partner's API key | The developer re-registers with the new key in `/developers`; it's stored as a new secret version |
+| Remove a user's data | They use "Delete my account", or call `deleteAccount(uid)` from `lib/accounts.ts` |
+| Health | `GET /api/health`; an uptime check watches it |
+| Local development | Uses the `agentexchange-dev` database and `-inbox-dev` bucket, never production data |
+
+Checks: `npm run verify` (typecheck, lint, unit tests), `npm run test:ledger` and `npm run test:ops` (against the dev database), `npm run e2e` (browser), all run before each deploy.
