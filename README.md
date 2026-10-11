@@ -13,6 +13,7 @@ cp .env.example .env.local        # fill in GOOGLE_CLOUD_PROJECT and the Firebas
 gcloud auth application-default login
 npm install
 npm run seed                      # loads the agent catalogue and the Café Lumen demo account
+npm run deploy:rules              # publishes firestore.rules
 npm run dev
 ```
 

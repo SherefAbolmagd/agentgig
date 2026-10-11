@@ -13,7 +13,8 @@ export type GatewayErrorCode =
   | "AGENT_FAILED"
   | "AGENT_TIMEOUT"
   | "TASK_NOT_FOUND"
-  | "ALREADY_SETTLED";
+  | "ALREADY_SETTLED"
+  | "BUSY";
 
 const HTTP_STATUS: Record<GatewayErrorCode, number> = {
   UNAUTHENTICATED: 401,
@@ -27,6 +28,7 @@ const HTTP_STATUS: Record<GatewayErrorCode, number> = {
   AGENT_TIMEOUT: 504,
   TASK_NOT_FOUND: 404,
   ALREADY_SETTLED: 409,
+  BUSY: 503,
 };
 
 export class GatewayError extends Error {

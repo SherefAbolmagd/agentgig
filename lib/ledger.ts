@@ -44,7 +44,7 @@ export async function reserveTokens(req: ReserveRequest): Promise<{ taskId: stri
   }
   const taskRef = req.idempotencyKey ? tasks().doc(`${req.userId}_${req.idempotencyKey}`) : tasks().doc();
 
-  return db().runTransaction(async (tx) => {
+  return ledgerTransaction(async (tx) => {
     const [userSnap, existing] = await Promise.all([tx.get(users().doc(req.userId)), tx.get(taskRef)]);
     if (!userSnap.exists) throw new GatewayError("USER_NOT_FOUND", "We couldn't find your account.");
     const user = userSnap.data() as UserDoc;
@@ -101,7 +101,7 @@ export async function settleTask(
   outcome: "charge" | "release",
   description: string,
 ): Promise<{ balance: number }> {
-  return db().runTransaction(async (tx) => {
+  return ledgerTransaction(async (tx) => {
     const taskSnap = await tx.get(tasks().doc(taskId));
     if (!taskSnap.exists) throw new GatewayError("TASK_NOT_FOUND", `Task ${taskId} does not exist.`);
     const task = taskSnap.data() as TaskDoc;
@@ -141,7 +141,7 @@ export async function topUp(userId: string, amount: number, description: string)
   if (!Number.isInteger(amount) || amount <= 0 || amount > 10_000) {
     throw new GatewayError("INVALID_INPUT", "Top-up must be between 1 and 10,000 tokens.");
   }
-  return db().runTransaction(async (tx) => {
+  return ledgerTransaction(async (tx) => {
     const ref = users().doc(userId);
     const snap = await tx.get(ref);
     if (!snap.exists) throw new GatewayError("USER_NOT_FOUND", "We couldn't find your account.");
@@ -150,6 +150,22 @@ export async function topUp(userId: string, amount: number, description: string)
     writeTxn(tx, { userId, type: "topup", amount, balanceAfter, description });
     return { balance: balanceAfter };
   });
+}
+
+/**
+ * Every ledger change touches the user's doc, so simultaneous tasks for one
+ * user contend. Allow more retries than Firestore's default 5, then report
+ * "busy" instead of a generic failure. Nothing is written when it gives up.
+ */
+async function ledgerTransaction<T>(fn: (tx: Transaction) => Promise<T>): Promise<T> {
+  try {
+    return await db().runTransaction(fn, { maxAttempts: 12 });
+  } catch (err) {
+    if ((err as { code?: number }).code === 10 /* gRPC ABORTED */) {
+      throw new GatewayError("BUSY", "Your account is handling a lot of tasks at once. Try again in a moment.");
+    }
+    throw err;
+  }
 }
 
 function writeTxn(tx: Transaction, row: Omit<TokenTransactionDoc, "createdAt">) {
