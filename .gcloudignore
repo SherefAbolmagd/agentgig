@@ -1,0 +1,12 @@
+# Files not uploaded by `gcloud run deploy --source .`
+.git
+.gitignore
+node_modules
+.next
+.env.local
+.env*.local
+e2e-shots
+partners
+fixtures
+tests
+*.md
