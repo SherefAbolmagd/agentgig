@@ -1,7 +1,7 @@
 import "server-only";
 import { applicationDefault, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore, initializeFirestore, type Firestore } from "firebase-admin/firestore";
+import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { env } from "./env";
 
 // Uses Application Default Credentials: `gcloud auth application-default login`
@@ -19,14 +19,13 @@ const cache = globalThis as unknown as { __axFirestore?: Firestore };
 
 export function db(): Firestore {
   if (!cache.__axFirestore) {
-    const app = adminApp();
-    const dbId = env().FIRESTORE_DATABASE_ID;
+    const store = getFirestore(adminApp(), env().FIRESTORE_DATABASE_ID);
     try {
-      cache.__axFirestore = initializeFirestore(app, { ignoreUndefinedProperties: true }, dbId);
+      store.settings({ ignoreUndefinedProperties: true });
     } catch {
-      // Already initialised by an earlier module instance (dev hot reload).
-      cache.__axFirestore = getFirestore(app, dbId);
+      // Already configured and in use by an earlier module instance (dev hot reload).
     }
+    cache.__axFirestore = store;
   }
   return cache.__axFirestore;
 }
