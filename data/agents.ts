@@ -232,5 +232,6 @@ export const DEMO_USER = {
     website: "https://cafelumen.co.uk",
     location: "Manchester, UK",
     openingHours: "Mon–Fri 07:00–17:00",
+    timeZone: "Europe/London",
   },
 } as const;

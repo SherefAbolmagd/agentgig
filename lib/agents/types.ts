@@ -1,5 +1,6 @@
+import type { Part } from "@google/genai";
 import type { z } from "zod";
-import type { GenerateJsonResult, ModelTier } from "@/lib/vertex";
+import { filePart, textPart, type GenerateJsonResult, type ModelTier } from "@/lib/vertex";
 import type { ApprovalAction, ApprovalDoc, BusinessProfile } from "@/types/firestore";
 
 export interface UploadedFile {
@@ -13,6 +14,17 @@ export interface Grounding {
   businessName: string;
   profile: BusinessProfile | null;
   styleExamples: { draft: string; edited: string }[];
+  /** Company knowledge files the owner shared with this agent. */
+  documents: UploadedFile[];
+}
+
+/** Knowledge files as model parts: text files inline, PDFs as documents. */
+export function documentParts(g: Grounding): Part[] {
+  return g.documents.flatMap((d) =>
+    d.mimeType === "application/pdf"
+      ? [textPart(`Company document “${d.name}”:`), filePart(d.data, d.mimeType)]
+      : [textPart(`Company document “${d.name}”:\n${d.data.toString("utf8")}`)],
+  );
 }
 
 export interface AgentRunContext<I> {
@@ -69,6 +81,9 @@ export function groundingPrompt(g: Grounding): string {
     if (p.website) lines.push(`Website: ${p.website}`);
     if (p.location) lines.push(`Location: ${p.location}`);
     if (p.openingHours) lines.push(`Opening hours: ${p.openingHours}`);
+  }
+  if (g.documents.length) {
+    lines.push(`Company documents attached below: ${g.documents.map((d) => d.name).join(", ")}. Treat them as facts about the business.`);
   }
   if (g.styleExamples.length) {
     lines.push("", "The owner edited earlier drafts like this. Follow their edits' style:");

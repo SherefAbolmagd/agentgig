@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { isGatewayError } from "./errors";
+import { GatewayError, isGatewayError } from "./errors";
 import type { UploadedFile } from "./agents";
 
 /** Converts any thrown error into a JSON response. Unknown errors are logged and hidden. */
@@ -8,6 +8,28 @@ export function errorResponse(err: unknown): NextResponse {
   if (isGatewayError(err)) return NextResponse.json(err.toJSON(), { status: err.status });
   console.error(err);
   return NextResponse.json({ error: { code: "INTERNAL", message: "Something went wrong on our side." } }, { status: 500 });
+}
+
+/** Wraps a route handler so any thrown error becomes a JSON error response. */
+export function handle<C>(fn: (req: Request, ctx: C) => Promise<unknown>) {
+  return async (req: Request, ctx: C) => {
+    try {
+      const body = await fn(req, ctx);
+      return body instanceof Response ? body : NextResponse.json(body ?? { ok: true });
+    } catch (err) {
+      return errorResponse(err);
+    }
+  };
+}
+
+/** Parses a JSON body with a Zod schema, as INVALID_INPUT on failure. */
+export async function readJson<T>(req: Request, schema: { safeParse(v: unknown): { success: true; data: T } | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } } }): Promise<T> {
+  const parsed = schema.safeParse(await req.json().catch(() => undefined));
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new GatewayError("INVALID_INPUT", `${issue.path.join(".") || "Request"}: ${issue.message}`);
+  }
+  return parsed.data;
 }
 
 /**

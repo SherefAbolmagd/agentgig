@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { generateJson, textPart } from "@/lib/vertex";
-import { defineAgent, groundingPrompt } from "./types";
+import { defineAgent, documentParts, groundingPrompt } from "./types";
 
 const TONES = ["Friendly", "Confident", "Expert", "Playful"] as const;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -27,6 +27,7 @@ export type EchoSocialOutput = z.infer<typeof ModelOutput> & {
   text: string;
   characterCount: number;
   scheduledFor: string;
+  timeZone: string;
 };
 
 const MAX_CHARS = 1300; // stays above LinkedIn's "see more" fold on most posts
@@ -36,7 +37,7 @@ Write one LinkedIn company-page post for the business described below.
 Rules:
 - Write in the business's tone of voice and match the requested tone.
 - Speak to the target audience's real day-to-day problem, then show how the business helps.
-- Use only facts given about the business. Never invent prices, awards, statistics or customers.
+- Use only facts given about the business and its documents. Never invent products, features, materials, prices, awards, statistics or customers. If a detail isn't given, leave it out.
 - Hook, body and call to action together must stay under ${MAX_CHARS} characters.
 - At most one emoji in the whole post. No bullet lists of more than three items.
 - Hashtags: 3–6, specific to the audience and location, no generic ones like #business.
@@ -60,8 +61,9 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
       input.topic ? `What the post should be about: ${input.topic}` : "Topic: choose the most compelling offer from the products above.",
     ].join("\n");
 
-    const res = await generateJson({ tier: "flash", system: SYSTEM, parts: [textPart(brief)], schema: ModelOutput, temperature: 0.8, thinkingBudget: 0 });
+    const res = await generateJson({ tier: "flash", system: SYSTEM, parts: [...documentParts(grounding), textPart(brief)], schema: ModelOutput, temperature: 0.6, thinkingBudget: 0 });
     const d = res.data;
+    const timeZone = grounding.profile?.timeZone ?? DEFAULT_TIME_ZONE;
     const hashtags = d.hashtags.map((h) => h.replace(/^#/, "").replace(/\s+/g, ""));
     const text = `${d.hook}\n\n${d.body}\n\n${d.callToAction}\n\n${hashtags.map((h) => `#${h}`).join(" ")}`;
 
@@ -72,7 +74,8 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
         hashtags,
         text,
         characterCount: text.length,
-        scheduledFor: nextOccurrence(d.bestTime.day, d.bestTime.time).toISOString(),
+        timeZone,
+        scheduledFor: nextOccurrence(d.bestTime.day, d.bestTime.time, timeZone).toISOString(),
       },
     };
   },
@@ -82,6 +85,7 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: output.timeZone,
     });
     return {
       title: "Your LinkedIn post is ready",
@@ -101,15 +105,32 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
   },
 });
 
-/** Next date (in server time) falling on `day` at `HH:MM`, at least one hour from now. */
-function nextOccurrence(day: (typeof DAYS)[number], time: string): Date {
+const DEFAULT_TIME_ZONE = "Europe/London";
+
+/** Next `day` at `HH:MM` in the business's time zone, at least one hour from now. */
+export function nextOccurrence(day: (typeof DAYS)[number], time: string, timeZone: string, now = new Date()): Date {
   const [h, m] = /^(\d{1,2}):(\d{2})$/.test(time) ? time.split(":").map(Number) : [8, 30];
-  const target = (DAYS.indexOf(day) + 1) % 7; // JS: Sunday = 0
-  const d = new Date();
-  d.setSeconds(0, 0);
-  d.setHours(h, m);
-  let add = (target - d.getDay() + 7) % 7;
-  if (add === 0 && d.getTime() < Date.now() + 3_600_000) add = 7;
-  d.setDate(d.getDate() + add);
-  return d;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "numeric", day: "numeric", weekday: "short" })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  const today = DAYS.indexOf(parts.weekday as (typeof DAYS)[number]);
+  let add = (DAYS.indexOf(day) - today + 7) % 7;
+  for (let attempt = 0; attempt < 2; attempt++, add += 7) {
+    const wall = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) + add, h, m);
+    const utc = wall - zoneOffsetMs(wall, timeZone);
+    if (utc >= now.getTime() + 3_600_000) return new Date(utc);
+  }
+  return new Date(now.getTime() + 7 * 86_400_000);
+}
+
+/** How far `timeZone` is ahead of UTC at the given instant. */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })
+      .formatToParts(new Date(instant))
+      .map((x) => [x.type, x.value]),
+  );
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - instant;
 }

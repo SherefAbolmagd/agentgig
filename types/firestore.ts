@@ -42,6 +42,8 @@ export interface BusinessProfile {
   website?: string;
   location?: string;
   openingHours?: string;
+  /** IANA zone used for scheduling, e.g. "Europe/London". */
+  timeZone?: string;
 }
 
 export interface UserDoc {

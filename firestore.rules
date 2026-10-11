@@ -18,7 +18,13 @@ service cloud.firestore {
 
     match /hires/{id}              { allow read: if owns(resource.data); }
     match /connections/{id}        { allow read: if owns(resource.data); }
-    match /tasks/{id}              { allow read: if owns(resource.data); }
+    // The dashboard subscribes to tasks/{uid}_{key} before the task exists,
+    // so a missing doc is readable when its ID starts with the reader's uid.
+    match /tasks/{id} {
+      allow read: if resource == null
+        ? signedIn() && id.matches(request.auth.uid + '_.+')
+        : owns(resource.data);
+    }
     match /token_transactions/{id} { allow read: if owns(resource.data); }
     match /approvals/{id}          { allow read: if owns(resource.data); }
     match /knowledge_sources/{id}  { allow read: if owns(resource.data); }
