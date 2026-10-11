@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Dark mode follows the OS by default; a .dark or .light class on <html> overrides it. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  /* AgentExchange extras: tokens (amber), the owner's own actions (blue) */
+  --color-token: var(--token);
+  --color-token-soft: var(--token-soft);
+  --color-you: var(--you);
+  --color-you-soft: var(--you-soft);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-console: var(--console);
+  --color-console-foreground: var(--console-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: #f3f5f2;
+  --foreground: #14201b;
+  --card: #ffffff;
+  --card-foreground: #14201b;
+  --popover: #ffffff;
+  --popover-foreground: #14201b;
+  --primary: #0b7a62;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ede8;
+  --secondary-foreground: #14201b;
+  --muted: #e9ede8;
+  --muted-foreground: #56655e;
+  --accent: #dcefe8;
+  --accent-foreground: #0b7a62;
+  --destructive: #b4332b;
+  --destructive-soft: #f8e1de;
+  --border: #d5ddd7;
+  --input: #d5ddd7;
+  --ring: #0b7a62;
+  --token: #9a6506;
+  --token-soft: #f7ebcf;
+  --you: #3b5bdb;
+  --you-soft: #e1e7fb;
+  --console: #0f1714;
+  --console-foreground: #cfe3da;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: #0e1412;
+    --foreground: #e6eeea;
+    --card: #151d1a;
+    --card-foreground: #e6eeea;
+    --popover: #151d1a;
+    --popover-foreground: #e6eeea;
+    --primary: #3cc79f;
+    --primary-foreground: #06221a;
+    --secondary: #1c2622;
+    --secondary-foreground: #e6eeea;
+    --muted: #1c2622;
+    --muted-foreground: #93a49c;
+    --accent: #163a30;
+    --accent-foreground: #3cc79f;
+    --destructive: #f08378;
+    --destructive-soft: #3d1e1b;
+    --border: #2a3632;
+    --input: #2a3632;
+    --ring: #3cc79f;
+    --token: #e7b451;
+    --token-soft: #3a2e14;
+    --you: #8ea6ff;
+    --you-soft: #1f2847;
+    --console: #090e0c;
+    color-scheme: dark;
+  }
+}
+
+:root.dark {
+  --background: #0e1412;
+  --foreground: #e6eeea;
+  --card: #151d1a;
+  --card-foreground: #e6eeea;
+  --popover: #151d1a;
+  --popover-foreground: #e6eeea;
+  --primary: #3cc79f;
+  --primary-foreground: #06221a;
+  --secondary: #1c2622;
+  --secondary-foreground: #e6eeea;
+  --muted: #1c2622;
+  --muted-foreground: #93a49c;
+  --accent: #163a30;
+  --accent-foreground: #3cc79f;
+  --destructive: #f08378;
+  --destructive-soft: #3d1e1b;
+  --border: #2a3632;
+  --input: #2a3632;
+  --ring: #3cc79f;
+  --token: #e7b451;
+  --token-soft: #3a2e14;
+  --you: #8ea6ff;
+  --you-soft: #1f2847;
+  --console: #090e0c;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
+    text-wrap: balance;
+  }
+}

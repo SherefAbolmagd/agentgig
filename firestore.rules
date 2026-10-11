@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Clients may read their own data live; every write goes through API routes
+// using the Admin SDK, which bypasses these rules. Nobody can edit their own
+// balance from the browser.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owns(data) { return signedIn() && data.userId == request.auth.uid; }
+
+    match /agents/{slug} {
+      allow read: if resource.data.status == 'listed';
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /hires/{id}              { allow read: if owns(resource.data); }
+    match /connections/{id}        { allow read: if owns(resource.data); }
+    match /tasks/{id}              { allow read: if owns(resource.data); }
+    match /token_transactions/{id} { allow read: if owns(resource.data); }
+    match /approvals/{id}          { allow read: if owns(resource.data); }
+    match /knowledge_sources/{id}  { allow read: if owns(resource.data); }
+
+    match /{document=**} {
+      allow write: if false;
+    }
+  }
+}
