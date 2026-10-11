@@ -60,7 +60,7 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
       input.topic ? `What the post should be about: ${input.topic}` : "Topic: choose the most compelling offer from the products above.",
     ].join("\n");
 
-    const res = await generateJson({ tier: "flash", system: SYSTEM, parts: [textPart(brief)], schema: ModelOutput, temperature: 0.8 });
+    const res = await generateJson({ tier: "flash", system: SYSTEM, parts: [textPart(brief)], schema: ModelOutput, temperature: 0.8, thinkingBudget: 0 });
     const d = res.data;
     const hashtags = d.hashtags.map((h) => h.replace(/^#/, "").replace(/\s+/g, ""));
     const text = `${d.hook}\n\n${d.body}\n\n${d.callToAction}\n\n${hashtags.map((h) => `#${h}`).join(" ")}`;

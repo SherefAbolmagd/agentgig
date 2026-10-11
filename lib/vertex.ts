@@ -41,6 +41,11 @@ export interface GenerateJsonOptions<S extends z.ZodType> {
   parts: Part[];
   schema: S;
   temperature?: number;
+  /**
+   * Tokens the model may spend reasoning before it answers. 0 turns thinking
+   * off (Flash only); Pro needs at least 128. Omit for the model's default.
+   */
+  thinkingBudget?: number;
   timeoutMs?: number;
   /** Name of a Vertex AI cached content resource (company knowledge, Milestone 2). */
   cachedContent?: string;
@@ -72,6 +77,7 @@ export async function generateJson<S extends z.ZodType>(opts: GenerateJsonOption
           responseMimeType: "application/json",
           responseJsonSchema: toGeminiSchema(opts.schema),
           cachedContent: opts.cachedContent,
+          thinkingConfig: opts.thinkingBudget === undefined ? undefined : { thinkingBudget: opts.thinkingBudget },
           abortSignal: AbortSignal.timeout(timeoutMs),
         },
       });

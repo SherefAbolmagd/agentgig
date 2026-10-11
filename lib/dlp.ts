@@ -50,8 +50,15 @@ const inspectConfig = {
 
 export async function scrubText<K extends string>(fields: Record<K, string>): Promise<ScrubTextResult<K>> {
   const entries = Object.entries(fields) as [K, string][];
+  // The regex pass also runs after the API as a backstop: DLP rightly ignores
+  // addresses on reserved domains (e.g. .example), but we'd rather over-redact.
   const results = await Promise.all(
-    entries.map(([, value]) => (env().DLP_MODE === "local" ? scrubLocal(value) : scrubWithApi(value))),
+    entries.map(async ([, value]) => {
+      if (env().DLP_MODE === "local") return scrubLocal(value);
+      const api = await scrubWithApi(value);
+      const backstop = scrubLocal(api.text);
+      return { text: backstop.text, findings: [...api.findings, ...backstop.findings] };
+    }),
   );
   return {
     fields: Object.fromEntries(entries.map(([key], i) => [key, results[i].text])) as Record<K, string>,

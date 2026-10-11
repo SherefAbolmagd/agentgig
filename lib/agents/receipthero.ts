@@ -92,6 +92,7 @@ export const receiptHero = defineAgent<ReceiptHeroInput, ReceiptHeroOutput>({
       ],
       schema: Extracted,
       temperature: 0,
+      thinkingBudget: 512, // reading figures needs little reasoning; the maths is ours
     });
     const ex = res.data;
     if (!ex.isInvoiceOrReceipt) {
