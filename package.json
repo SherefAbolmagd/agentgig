@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "seed": "tsx --conditions=react-server scripts/seed.ts"
+    "seed": "tsx --conditions=react-server scripts/seed.ts",
+    "test": "tsx --conditions=react-server --test tests/*.test.ts",
+    "test:ledger": "tsx --conditions=react-server scripts/test-ledger.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@google-cloud/dlp": "^7.1.1",

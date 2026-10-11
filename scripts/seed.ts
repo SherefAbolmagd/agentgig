@@ -72,6 +72,28 @@ async function main() {
   } else {
     console.log(`• demo user ${DEMO_USER.uid} already exists (use --reset to start over)`);
   }
+
+  // Demo hires: EchoSocial asks first, ReceiptHero acts on its own, so both
+  // delivery paths can be exercised.
+  for (const [slug, approvalMode] of [["echosocial", "ask"], ["receipthero", "auto"]] as const) {
+    const agent = SEED_AGENTS.find((a) => a.slug === slug)!;
+    await store
+      .collection(COLLECTIONS.hires)
+      .doc(`${DEMO_USER.uid}_${slug}`)
+      .set({
+        userId: DEMO_USER.uid,
+        agentId: slug,
+        trigger: agent.triggers.find((t) => t.type === "manual"),
+        approvalMode,
+        connectionIds: [],
+        knowledgeAccess: ["profile"],
+        monthlyCapTokens: null,
+        active: true,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+  }
+  console.log("✓ demo hires: echosocial (asks first), receipthero (acts on its own)");
 }
 
 main().then(

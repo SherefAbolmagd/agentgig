@@ -18,6 +18,25 @@ npm run dev
 
 `npm run seed -- --reset` puts the demo account back to 312 tokens and clears its tasks.
 
+## Checks
+
+```bash
+npm test               # unit tests: ReceiptHero audit maths, local DLP scrubbing
+npm run test:ledger    # 20 concurrent tasks vs a 10-token balance, against real Firestore
+npm run smoke          # end-to-end against `npm run dev` (needs DEMO_AUTH=true)
+```
+
+Run a task by hand (with `DEMO_AUTH=true`):
+
+```bash
+curl -X POST localhost:3000/api/agents/execute -H "x-demo-user: demo-cafe-lumen" \
+  -H "content-type: application/json" \
+  -d '{"agentId":"echosocial","input":{"brandUrl":"https://cafelumen.co.uk","audience":"Office managers in Manchester","tone":"Friendly"}}'
+
+curl -X POST localhost:3000/api/agents/execute -H "x-demo-user: demo-cafe-lumen" \
+  -F agentId=receipthero -F file=@fixtures/invoice-lumen-supplies.pdf
+```
+
 ## Layout
 
 ```

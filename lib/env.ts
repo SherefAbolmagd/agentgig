@@ -10,6 +10,11 @@ const ServerEnvSchema = z.object({
   /** "api" calls Cloud DLP; "local" uses the regex fallback (offline dev, faster demos). */
   DLP_MODE: z.enum(["api", "local"]).default("api"),
   KNOWLEDGE_BUCKET: z.string().optional(),
+  /** Accept `x-demo-user` instead of a Firebase ID token. Local and demo use only. */
+  DEMO_AUTH: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;

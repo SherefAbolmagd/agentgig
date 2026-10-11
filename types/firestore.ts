@@ -159,6 +159,8 @@ export interface TaskDoc {
   origin: "manual" | "schedule" | "event" | "a2a";
   status: TaskStatus;
   cost: number;
+  /** Set once by lib/ledger.ts settleTask; makes settling idempotent. */
+  settlement?: "charged" | "released";
   /** Stored after scrubbing only. */
   input: Record<string, unknown>;
   output?: Record<string, unknown>;
