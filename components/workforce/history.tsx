@@ -35,7 +35,11 @@ export function RecentTasks({
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{agents.get(t.agentId)?.name ?? t.agentId}</span>
-                    <span className="text-xs text-muted-foreground">{when(t.createdAt)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {when(t.createdAt)}
+                      {t.origin === "event" && " · from inbox"}
+                      {t.origin === "schedule" && " · scheduled"}
+                    </span>
                   </span>
                   <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", TONE_CLASSES[s.tone])}>{s.label}</span>
                 </button>

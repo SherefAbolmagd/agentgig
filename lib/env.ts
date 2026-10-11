@@ -10,6 +10,17 @@ const ServerEnvSchema = z.object({
   /** "api" calls Cloud DLP; "local" uses the regex fallback (offline dev, faster demos). */
   DLP_MODE: z.enum(["api", "local"]).default("api"),
   KNOWLEDGE_BUCKET: z.string().optional(),
+  /** Bucket for the invoice inbox; uploads there trigger ReceiptHero via Pub/Sub. */
+  INBOX_BUCKET: z.string().optional(),
+  /**
+   * Public URL of this service. When set, triggered work goes through Cloud
+   * Tasks and internal calls must carry a Google OIDC token for
+   * TASKS_SERVICE_ACCOUNT. When unset (local dev), triggered work runs inline.
+   */
+  APP_URL: z.url().optional(),
+  TASKS_QUEUE: z.string().default("agent-tasks"),
+  TASKS_LOCATION: z.string().default("us-central1"),
+  TASKS_SERVICE_ACCOUNT: z.string().optional(),
   /** Accept `x-demo-user` instead of a Firebase ID token. Local and demo use only. */
   DEMO_AUTH: z
     .enum(["true", "false"])

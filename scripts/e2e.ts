@@ -5,7 +5,7 @@
  *   npm run e2e                 # screenshots to ./e2e-shots
  *   npm run e2e -- <out-dir>
  */
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { chromium, type Page } from "playwright";
 
 const BASE = process.env.E2E_BASE ?? "http://localhost:3000";
@@ -108,6 +108,39 @@ async function main() {
     await step("balance reflects all three charges", async () => {
       const header = await page.locator("header").first().innerText();
       if (!/\b299\b/.test(header)) throw new Error(`expected 299 tokens in header, got: ${header.replace(/\s+/g, " ").slice(0, 120)}`);
+    });
+
+    await step("invoice inbox processes drops in the background", async () => {
+      await page.goto(`${BASE}/workforce?agent=receipthero`);
+      await page.getByText("Your invoice inbox").waitFor({ timeout: 30_000 });
+      const pdf = readFileSync("fixtures/invoice-lumen-supplies.pdf");
+      await page.getByLabel("Drop invoices in your inbox").setInputFiles([
+        { name: "inbox-copy-1.pdf", mimeType: "application/pdf", buffer: pdf },
+        { name: "inbox-copy-2.pdf", mimeType: "application/pdf", buffer: pdf },
+      ]);
+      await page.getByText(/2 invoices dropped in your inbox/).waitFor({ timeout: 30_000 });
+      const recent = page.locator("section", { has: page.getByRole("heading", { name: "Recent tasks" }) });
+      await recent.getByText("from inbox").nth(1).waitFor({ timeout: 60_000 });
+      // Wait until both background tasks have finished.
+      await page.waitForFunction(
+        () => {
+          const s = [...document.querySelectorAll("section")].find((x) => x.querySelector("h2")?.textContent === "Recent tasks");
+          return !!s && !/Working|Starting/.test(s.textContent ?? "");
+        },
+        null,
+        { timeout: 120_000 },
+      );
+      // The manual step already processed this invoice, so both inbox copies are duplicates.
+      let duplicates = 0;
+      for (const i of [0, 1]) {
+        await recent.locator("li button", { hasText: "from inbox" }).nth(i).click();
+        await page.getByText(/The total doesn't add up/).waitFor({ timeout: 15_000 });
+        duplicates += await page.getByText("You may have seen this invoice before").count();
+      }
+      if (duplicates !== 2) throw new Error(`expected both copies flagged as duplicates, saw ${duplicates}`);
+      await shot(page, "inbox");
+      const header = await page.locator("header").first().innerText();
+      if (!/\b295\b/.test(header)) throw new Error(`expected 295 tokens after two inbox invoices, got: ${header.replace(/\s+/g, " ").slice(0, 120)}`);
     });
 
     await step("marketplace lists all agents", async () => {

@@ -18,6 +18,8 @@ export const COLLECTIONS = {
   approvals: "approvals",
   knowledgeSources: "knowledge_sources",
   styleExamples: "style_examples",
+  /** Invoice numbers ReceiptHero has seen, for atomic duplicate detection. Server-only. */
+  invoiceKeys: "invoice_keys",
 } as const;
 
 export type ToolProvider =

@@ -64,7 +64,7 @@ export const SEED_AGENTS: SeedAgent[] = [
     ],
     tools: ["google_drive", "gmail"],
     triggers: [
-      { id: "drive-invoices", label: "When a file lands in Drive /Invoices", type: "event", event: "google_drive.file_created" },
+      { id: "inbox", label: "When invoices land in my inbox", type: "event", event: "inbox.file_created" },
       { id: "manual", label: "Only when I click Run", type: "manual" },
     ],
     timeSaved: "2 h/week",

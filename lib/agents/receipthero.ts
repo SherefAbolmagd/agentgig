@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
 import { GatewayError } from "@/lib/errors";
@@ -220,15 +222,21 @@ export function audit(ex: Extracted): AuditFlag[] {
   return flags;
 }
 
+/**
+ * Claims an invoice number for this user with a create-only write, so two
+ * copies arriving at the same moment (an inbox drop) can't both pass as new.
+ * Returns true if another task claimed it first.
+ */
 async function seenBefore(userId: string, invoiceKey: string, taskId: string): Promise<boolean> {
-  const snap = await db()
-    .collection(COLLECTIONS.tasks)
-    .where("userId", "==", userId)
-    .where("agentId", "==", "receipthero")
-    .where("output.invoiceKey", "==", invoiceKey)
-    .limit(2)
-    .get();
-  return snap.docs.some((d) => d.id !== taskId && d.get("settlement") === "charged");
+  const id = createHash("sha256").update(`${userId}\n${invoiceKey}`).digest("hex").slice(0, 40);
+  const ref = db().collection(COLLECTIONS.invoiceKeys).doc(id);
+  try {
+    await ref.create({ userId, invoiceKey, taskId, createdAt: FieldValue.serverTimestamp() });
+    return false;
+  } catch (err) {
+    if ((err as { code?: number }).code !== 6 /* ALREADY_EXISTS */) throw err;
+    return (await ref.get()).get("taskId") !== taskId;
+  }
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;

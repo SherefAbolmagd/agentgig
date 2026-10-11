@@ -28,21 +28,26 @@ async function main() {
   const store = db();
   const reset = process.argv.includes("--reset");
 
+  // Never overwrite a listing a developer has registered over A2A.
+  const refs = SEED_AGENTS.map((a) => store.collection(COLLECTIONS.agents).doc(a.slug));
+  const current = await store.getAll(...refs);
   const batch = store.batch();
-  for (const agent of SEED_AGENTS) {
-    batch.set(store.collection(COLLECTIONS.agents).doc(agent.slug), {
-      ...agent,
-      listedAt: FieldValue.serverTimestamp(),
-    });
-  }
+  let kept = 0;
+  SEED_AGENTS.forEach((agent, i) => {
+    if (current[i].get("ownerUid")) {
+      kept++;
+      return;
+    }
+    batch.set(refs[i], { ...agent, listedAt: FieldValue.serverTimestamp() });
+  });
   await batch.commit();
-  console.log(`✓ ${SEED_AGENTS.length} agents upserted`);
+  console.log(`✓ ${SEED_AGENTS.length - kept} agents upserted${kept ? `, ${kept} registered partner listing(s) left as they are` : ""}`);
 
   const userRef = store.collection(COLLECTIONS.users).doc(DEMO_USER.uid);
   const exists = (await userRef.get()).exists;
 
   if (reset) {
-    for (const c of [COLLECTIONS.tasks, COLLECTIONS.tokenTransactions, COLLECTIONS.approvals, COLLECTIONS.hires]) {
+    for (const c of [COLLECTIONS.tasks, COLLECTIONS.tokenTransactions, COLLECTIONS.approvals, COLLECTIONS.hires, COLLECTIONS.invoiceKeys]) {
       const n = await deleteWhere(store, c, DEMO_USER.uid);
       console.log(`  deleted ${n} docs from ${c}`);
     }

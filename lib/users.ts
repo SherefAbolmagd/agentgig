@@ -52,7 +52,7 @@ export async function ensureUser(caller: Caller): Promise<{ user: UserDoc; creat
 
   if (created && demo) {
     await hireAgent(caller.uid, { agentId: "echosocial", triggerId: "manual", approvalMode: "ask", knowledgeAccess: ["profile"] });
-    await hireAgent(caller.uid, { agentId: "receipthero", triggerId: "manual", approvalMode: "auto", knowledgeAccess: ["profile"] });
+    await hireAgent(caller.uid, { agentId: "receipthero", triggerId: "inbox", approvalMode: "auto", knowledgeAccess: ["profile"] });
   }
   return { user: (await ref.get()).data() as UserDoc, created };
 }

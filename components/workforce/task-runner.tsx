@@ -72,6 +72,28 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
     });
   }
 
+  const inboxInput = useRef<HTMLInputElement>(null);
+  const [dropping, setDropping] = useState(false);
+
+  async function dropInInbox(files: FileList | File[]) {
+    const list = Array.from(files);
+    if (!list.length) return;
+    setDropping(true);
+    try {
+      const form = new FormData();
+      list.forEach((f) => form.append("file", f));
+      const res = await api<{ queued: number }>("/api/inbox", { form });
+      toast.success(`${res.queued} invoice${res.queued > 1 ? "s" : ""} dropped in your inbox.`, {
+        description: "ReceiptHero is working through them. Watch Recent tasks.",
+      });
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Upload failed. Try again.");
+    } finally {
+      setDropping(false);
+      if (inboxInput.current) inboxInput.current.value = "";
+    }
+  }
+
   async function useSample() {
     const blob = await (await fetch(SAMPLE_INVOICE)).blob();
     setFile(new File([blob], "invoice-lumen-supplies.pdf", { type: "application/pdf" }));
@@ -171,6 +193,27 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
           </div>
           <RunRow agent={agent} busy={busy} />
         </form>
+      )}
+
+      {agent.slug === "receipthero" && hire.trigger.event === "inbox.file_created" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-accent/40 px-4 py-3">
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-medium">Your invoice inbox</p>
+            <p className="text-muted-foreground">Drop up to 10 invoices. Each one triggers ReceiptHero in the background, no clicks needed.</p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => inboxInput.current?.click()} disabled={dropping}>
+            {dropping ? <Loader2 className="animate-spin" /> : <Upload />} Drop invoices
+          </Button>
+          <input
+            ref={inboxInput}
+            type="file"
+            multiple
+            hidden
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            aria-label="Drop invoices in your inbox"
+            onChange={(e) => e.target.files && dropInInbox(e.target.files)}
+          />
+        </div>
       )}
 
       {agent.slug === "receipthero" && (
