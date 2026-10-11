@@ -68,3 +68,24 @@ firestore.rules      clients read their own docs; all writes go through the API
 ## How a task runs
 
 Every task goes through one gateway: **Verify → Reserve tokens → Scrub personal data → Ground with company knowledge → Run agent → Deliver and charge.** Tokens are held before the agent runs and charged only when it returns output, so failed tasks cost nothing. Agents never act on the owner's tools directly; the gateway does, using OAuth tokens kept in Secret Manager.
+
+## Deployment (Google Cloud project `agentexchange-hackathon`)
+
+Live app: https://agentexchange-653235000565.us-central1.run.app
+
+| Piece | What it is |
+|---|---|
+| Cloud Run `agentexchange` | This app (Dockerfile, Next.js standalone), service account `agentexchange-app` |
+| Cloud Run `ledgerline-vat` | Sample partner A2A agent (`partners/ledgerline`), its own service account and API key |
+| Firestore `(default)` | Users, agents, hires, tasks, token ledger, approvals, knowledge |
+| Cloud Storage | `-knowledge` (company files), `-inbox` (invoice inbox, 1-day lifecycle), `-inbox-dev` (local only) |
+| Pub/Sub `inbox-events` → push `/api/triggers/inbox` | New inbox files start ReceiptHero |
+| Cloud Scheduler `agent-schedules` → `/api/triggers/cron` | Every 5 minutes; queues scheduled agents that are due |
+| Cloud Tasks `agent-tasks` → `/api/tasks/run` | Runs triggered jobs with retries; deterministic job names dedupe events |
+| Secret Manager | Partner API keys |
+
+Internal endpoints accept only Google-signed OIDC tokens for the app's service account. Redeploy with:
+
+```bash
+gcloud run deploy agentexchange --source . --region us-central1 --project agentexchange-hackathon
+```

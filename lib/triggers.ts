@@ -67,16 +67,43 @@ export async function enqueue(job: Job): Promise<"queued" | "duplicate" | "ran-i
  * task; only infrastructure errors are rethrown so Cloud Tasks retries.
  */
 export async function runJob(job: Job): Promise<{ status: string }> {
-  const files = job.gcsFile ? [await downloadJobFile(job.gcsFile)] : [];
+  log("job.start", { key: job.key, agentId: job.agentId, origin: job.origin, file: job.gcsFile?.name });
+  let files: { name: string; mimeType: string; data: Buffer }[] = [];
+  if (job.gcsFile) {
+    try {
+      files = [await downloadJobFile(job.gcsFile)];
+    } catch (err) {
+      // Gone for good (already processed, or expired): retrying can't help.
+      if ((err as { code?: number }).code === 404) {
+        log("job.file_missing", { key: job.key, file: job.gcsFile.name }, "WARNING");
+        return { status: "not run: file no longer in the inbox" };
+      }
+      throw err;
+    }
+  }
+  // The inbox file is removed only once the outcome is final, so retries still find it.
+  const cleanup = async () => {
+    if (job.gcsFile) await gcs().bucket(job.gcsFile.bucket).file(job.gcsFile.name).delete({ ignoreNotFound: true }).catch(() => undefined);
+  };
   try {
     const res = await runTask({ userId: job.userId, agentId: job.agentId, rawInput: job.input, files, origin: job.origin, idempotencyKey: job.key });
+    await cleanup();
+    log("job.done", { key: job.key, status: res.status });
     return { status: res.status };
   } catch (err) {
-    if (isGatewayError(err) && err.code !== "BUSY") return { status: `not run: ${err.code}` };
+    if (isGatewayError(err) && err.code !== "BUSY") {
+      await cleanup();
+      log("job.not_run", { key: job.key, code: err.code });
+      return { status: `not run: ${err.code}` };
+    }
+    log("job.error", { key: job.key, error: err instanceof Error ? err.message : String(err) }, "ERROR");
     throw err;
-  } finally {
-    if (job.gcsFile) await gcs().bucket(job.gcsFile.bucket).file(job.gcsFile.name).delete({ ignoreNotFound: true }).catch(() => undefined);
   }
+}
+
+/** One JSON line per event; Cloud Logging turns these into structured entries. */
+function log(message: string, fields: Record<string, unknown>, severity: "INFO" | "WARNING" | "ERROR" = "INFO") {
+  console.log(JSON.stringify({ severity, message, component: "triggers", ...fields }));
 }
 
 async function downloadJobFile(f: NonNullable<Job["gcsFile"]>) {
@@ -164,12 +191,17 @@ export async function dropInInbox(userId: string, file: { name: string; mimeType
 /** Handles a new inbox object: queue ReceiptHero if the owner has hired it with the inbox trigger. */
 export async function onInboxObject(bucket: string, name: string, contentType: string) {
   const userId = name.split("/")[0];
-  if (!userId || !INBOX_TYPES.has(contentType)) return "ignored";
+  if (!userId || !INBOX_TYPES.has(contentType)) {
+    log("inbox.ignored", { name, contentType });
+    return "ignored";
+  }
   const hire = (await db().collection(COLLECTIONS.hires).doc(`${userId}_receipthero`).get()).data() as HireDoc | undefined;
   if (!hire?.active || hire.trigger.event !== "inbox.file_created") {
     await gcs().bucket(bucket).file(name).delete({ ignoreNotFound: true });
+    log("inbox.no_hire", { name, trigger: hire?.trigger.id ?? null }, "WARNING");
     return "no inbox hire";
   }
+  log("inbox.enqueue", { name });
   return enqueue({
     key: `inbox-${name}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100),
     userId,
