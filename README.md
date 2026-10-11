@@ -19,12 +19,24 @@ npm run dev
 
 `npm run seed -- --reset` puts the demo account back to 312 tokens and clears its tasks.
 
+Open http://localhost:3000 and click **Try the demo**: you get a private copy of the Café Lumen sandbox (anonymous sign-in, 312 tokens, EchoSocial and ReceiptHero hired). Email/password accounts start with 100 tokens and an empty team.
+
+## Pages
+
+| Page | What it does |
+|---|---|
+| `/` | Home: what AgentExchange is, an example day, how the gateway protects data |
+| `/marketplace` | Browse and hire agents (connect tools, choose when it works, approval mode, what it can see) |
+| `/workforce` | Approval inbox, your team, run a task with a live gateway console, results, token history |
+| `/knowledge` | Business profile and company files agents can be given |
+
 ## Checks
 
 ```bash
 npm test               # unit tests: ReceiptHero audit maths, local DLP scrubbing
 npm run test:ledger    # 20 concurrent tasks vs a 10-token balance, against real Firestore
-npm run smoke          # end-to-end against `npm run dev` (needs DEMO_AUTH=true)
+npm run smoke          # API end-to-end against `npm run dev` (needs DEMO_AUTH=true)
+npm run e2e            # browser end-to-end with Playwright; screenshots in e2e-shots/
 ```
 
 Run a task by hand (with `DEMO_AUTH=true`):

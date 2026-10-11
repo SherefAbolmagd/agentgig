@@ -12,7 +12,8 @@
     "test": "tsx --conditions=react-server --test tests/*.test.ts",
     "test:ledger": "tsx --conditions=react-server scripts/test-ledger.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "deploy:rules": "tsx scripts/deploy-rules.ts"
+    "deploy:rules": "tsx scripts/deploy-rules.ts",
+    "e2e": "tsx scripts/e2e.ts"
   },
   "dependencies": {
     "@google-cloud/dlp": "^7.1.1",
@@ -42,6 +43,7 @@
     "dotenv": "^18.0.7",
     "eslint": "^9",
     "eslint-config-next": "15.5.27",
+    "playwright": "^1.56.1",
     "shadcn": "^4.21.4",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",

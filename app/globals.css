@@ -135,6 +135,12 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+  /* An implicit grid column is `auto` and grows to fit wide tables or code,
+     pushing the page sideways on phones. Give single-column grids a column
+     that can shrink; grid-cols-* utilities (a later layer) still override it. */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   h1, h2, h3 {
     @apply font-display tracking-tight;
     text-wrap: balance;

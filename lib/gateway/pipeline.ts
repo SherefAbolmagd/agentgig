@@ -187,7 +187,10 @@ function checkFiles(handler: AnyNativeAgent, files: UploadedFile[]) {
 }
 
 async function recordRejected(req: RunTaskRequest, agent: AgentDoc, handler: AnyNativeAgent, err: GatewayError) {
-  const ref = await db().collection(COLLECTIONS.tasks).add({
+  const col = db().collection(COLLECTIONS.tasks);
+  // Use the ID the dashboard is already watching when the request carried one.
+  const ref = req.idempotencyKey ? col.doc(`${req.userId}_${req.idempotencyKey}`) : col.doc();
+  await ref.set({
     userId: req.userId,
     agentId: agent.slug,
     hireId: `${req.userId}_${agent.slug}`,
