@@ -1,13 +1,21 @@
 import Link from "next/link";
-import { BriefcaseBusiness } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/** The Spark g: a lowercase g with an amber AI spark. Same drawing as app/icon.svg. */
+export function LogoMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden className={cn("size-8 shrink-0", className)}>
+      <circle cx="30" cy="27" r="14" fill="none" stroke="currentColor" strokeWidth="8.5" />
+      <path d="M44 18v23q0 15-15 15-7 0-11-4" fill="none" stroke="currentColor" strokeWidth="8.5" strokeLinecap="round" />
+      <path className="fill-token" d="M54 1.5Q54 9 61.5 9Q54 9 54 16.5Q54 9 46.5 9Q54 9 54 1.5Z" />
+    </svg>
+  );
+}
 
 export function Logo({ className }: { className?: string }) {
   return (
     <Link href="/" className={cn("flex items-center gap-2.5 font-display text-lg font-bold", className)}>
-      <span className="grid size-8 place-items-center rounded-lg bg-foreground text-background">
-        <BriefcaseBusiness className="size-4" strokeWidth={2.4} />
-      </span>
+      <LogoMark />
       AgentGig
     </Link>
   );
