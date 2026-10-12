@@ -21,12 +21,12 @@ async function slack<T extends SlackResponse>(token: string, method: string, bod
   return json;
 }
 
-/** Posts as the AgentExchange bot. Channel defaults to the one chosen at connect time. */
+/** Posts as the AgentGig bot. Channel defaults to the one chosen at connect time. */
 export async function slackPost(userId: string, msg: { channel?: string; text: string; threadTs?: string }) {
   const conn = await getConnection(userId, "slack");
   if (!conn) return null;
   const channel = msg.channel ?? (conn.meta?.defaultChannel as string | undefined);
-  if (!channel) throw new Error("Choose a Slack channel for AgentExchange in Company knowledge → Connections.");
+  if (!channel) throw new Error("Choose a Slack channel for AgentGig in Company knowledge → Connections.");
   const token = await accessToken(conn);
   const res = await slack(token, "chat.postMessage", { channel, text: msg.text, thread_ts: msg.threadTs, unfurl_links: false });
   const link = await slack<SlackResponse & { permalink?: string }>(token, "chat.getPermalink", { channel: res.channel, message_ts: res.ts }).catch(() => null);

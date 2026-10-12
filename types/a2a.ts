@@ -13,7 +13,10 @@ export const AGENT_CARD_PATH = "/.well-known/agent-card.json";
 export const LEGACY_AGENT_CARD_PATH = "/.well-known/agent.json";
 
 /** A2A has no pricing field, so listings declare price through this extension. */
-export const PRICING_EXTENSION_URI = "https://agentexchange.dev/ext/pricing/v1";
+export const PRICING_EXTENSION_URI = "https://agentgig.si/ext/pricing/v1";
+/** Pre-rebrand URIs, still accepted so already-registered partner cards keep working. */
+const LEGACY_PRICING_URI = "https://agentexchange.dev/ext/pricing/v1";
+const LEGACY_LISTING_URI = "https://agentexchange.dev/ext/listing/v1";
 
 export const AGENT_CATEGORIES = ["Marketing", "E-Commerce", "Finance", "HR/Ops"] as const;
 export type AgentCategory = (typeof AGENT_CATEGORIES)[number];
@@ -88,7 +91,7 @@ export type AgentCapabilities = z.infer<typeof AgentCapabilitiesSchema>;
 export type AgentCard = z.infer<typeof AgentCardSchema>;
 
 /** Optional listing details: tools the agent works in, and marketing copy for its card. */
-export const LISTING_EXTENSION_URI = "https://agentexchange.dev/ext/listing/v1";
+export const LISTING_EXTENSION_URI = "https://agentgig.si/ext/listing/v1";
 
 export const ListingParamsSchema = z.object({
   tools: z.array(z.string()).max(10).optional(),
@@ -98,14 +101,14 @@ export const ListingParamsSchema = z.object({
 export type ListingParams = z.infer<typeof ListingParamsSchema>;
 
 export function getListing(card: AgentCard): ListingParams {
-  const ext = card.capabilities.extensions?.find((e) => e.uri === LISTING_EXTENSION_URI);
+  const ext = card.capabilities.extensions?.find((e) => e.uri === LISTING_EXTENSION_URI || e.uri === LEGACY_LISTING_URI);
   const parsed = ListingParamsSchema.safeParse(ext?.params ?? {});
   return parsed.success ? parsed.data : {};
 }
 
 /** Reads the pricing extension from a card, or null if it is missing or malformed. */
 export function getPricing(card: AgentCard): PricingParams | null {
-  const ext = card.capabilities.extensions?.find((e) => e.uri === PRICING_EXTENSION_URI);
+  const ext = card.capabilities.extensions?.find((e) => e.uri === PRICING_EXTENSION_URI || e.uri === LEGACY_PRICING_URI);
   const parsed = PricingParamsSchema.safeParse(ext?.params);
   return parsed.success ? parsed.data : null;
 }

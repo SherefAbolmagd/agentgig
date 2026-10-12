@@ -27,7 +27,7 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  /* AgentExchange extras: tokens (amber), the owner's own actions (blue) */
+  /* AgentGig extras: tokens (amber), the owner's own actions (blue) */
   --color-token: var(--token);
   --color-token-soft: var(--token-soft);
   --color-you: var(--you);

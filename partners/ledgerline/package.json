@@ -2,7 +2,7 @@
   "name": "ledgerline-vat-reconciler",
   "version": "1.0.0",
   "private": true,
-  "description": "Sample third-party A2A agent for AgentExchange",
+  "description": "Sample third-party A2A agent for AgentGig",
   "type": "module",
   "main": "server.mjs",
   "scripts": {

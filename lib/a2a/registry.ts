@@ -88,7 +88,7 @@ export async function registerAgent(ownerUid: string, req: RegisterRequest): Pro
     const result = await sendMessage(
       card.url,
       [
-        { kind: "text", text: "AgentExchange verification task. Reply with a completed example result; nothing will be delivered." },
+        { kind: "text", text: "AgentGig verification task. Reply with a completed example result; nothing will be delivered." },
         { kind: "data", data: { verification: true } },
       ],
       { apiKey, timeoutMs: 30_000 },

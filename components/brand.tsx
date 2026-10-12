@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { ArrowLeftRight } from "lucide-react";
+import { BriefcaseBusiness } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Logo({ className }: { className?: string }) {
   return (
     <Link href="/" className={cn("flex items-center gap-2.5 font-display text-lg font-bold", className)}>
       <span className="grid size-8 place-items-center rounded-lg bg-foreground text-background">
-        <ArrowLeftRight className="size-4" strokeWidth={2.4} />
+        <BriefcaseBusiness className="size-4" strokeWidth={2.4} />
       </span>
-      AgentExchange
+      AgentGig
     </Link>
   );
 }

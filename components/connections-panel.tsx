@@ -94,7 +94,7 @@ function SlackChannelPicker({ current }: { current?: string }) {
     try {
       await api("/api/connections/slack/channels", { method: "PUT", json: { channel } });
       const ch = channels?.find((c) => c.id === channel);
-      toast.success(`Agents will use #${ch?.name}.`, { description: ch && !ch.isMember ? `Invite the bot there: type /invite @AgentExchange in #${ch.name}.` : undefined });
+      toast.success(`Agents will use #${ch?.name}.`, { description: ch && !ch.isMember ? `Invite the bot there: type /invite @AgentGig in #${ch.name}.` : undefined });
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Couldn't save the channel.");
     }

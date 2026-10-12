@@ -62,7 +62,7 @@ async function ensureStripeWebhook(): Promise<string | null> {
   const created = await stripe.webhookEndpoints.create({
     url,
     enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded"],
-    description: "AgentExchange token top-ups",
+    description: "AgentGig token top-ups",
   });
   console.log(`✓ Stripe webhook endpoint created for ${url}`);
   return created.secret ?? null;

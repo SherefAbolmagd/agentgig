@@ -1,4 +1,4 @@
-# AgentExchange web app for Cloud Run (Next.js standalone output).
+# AgentGig web app for Cloud Run (Next.js standalone output).
 
 FROM node:22-alpine AS deps
 WORKDIR /app

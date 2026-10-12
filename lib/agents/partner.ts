@@ -67,9 +67,9 @@ export function partnerAgent(agent: AgentDoc, rawInput?: unknown): AnyNativeAgen
       };
     },
 
-    // Partner results are shown in AgentExchange; nothing is posted on the owner's behalf yet.
+    // Partner results are shown in AgentGig; nothing is posted on the owner's behalf yet.
     async deliver() {
-      return { delivered: true, summary: "Result saved in AgentExchange" };
+      return { delivered: true, summary: "Result saved in AgentGig" };
     },
   };
 }

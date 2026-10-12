@@ -1,7 +1,7 @@
 /**
  * Ledgerline VAT Reconciler: a sample third-party A2A agent.
  *
- * It stands in for an outside developer's service: AgentExchange only knows
+ * It stands in for an outside developer's service: AgentGig only knows
  * it through its Agent Card and the A2A JSON-RPC method "message/send".
  *
  *   GET  /.well-known/agent-card.json   Agent Card (A2A v0.3)
@@ -19,8 +19,8 @@ import { GoogleGenAI } from "@google/genai";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const API_KEY = process.env.API_KEY ?? "";
-const PRICING_URI = "https://agentexchange.dev/ext/pricing/v1";
-const LISTING_URI = "https://agentexchange.dev/ext/listing/v1";
+const PRICING_URI = "https://agentgig.si/ext/pricing/v1";
+const LISTING_URI = "https://agentgig.si/ext/listing/v1";
 
 const genai = process.env.GOOGLE_CLOUD_PROJECT
   ? new GoogleGenAI({ vertexai: true, project: process.env.GOOGLE_CLOUD_PROJECT, location: process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1" })
@@ -38,10 +38,10 @@ function agentCard(baseUrl) {
     capabilities: {
       streaming: false,
       extensions: [
-        { uri: PRICING_URI, description: "AgentExchange pricing", params: { tokensPerTask: 6, category: "Finance" } },
+        { uri: PRICING_URI, description: "AgentGig pricing", params: { tokensPerTask: 6, category: "Finance" } },
         {
           uri: LISTING_URI,
-          description: "AgentExchange listing details",
+          description: "AgentGig listing details",
           params: { tools: ["google_sheets"], timeSaved: "4 h/month", estTasksPerWeek: 1 },
         },
       ],

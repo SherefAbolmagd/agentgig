@@ -140,7 +140,7 @@ function AgentCard({ agent: a, hired, onHire }: { agent: WithId<AgentDoc>; hired
       <div className="flex flex-wrap gap-1.5">
         <Badge className="bg-you-soft text-you hover:bg-you-soft">Saves ~{a.timeSaved}</Badge>
         {a.source === "native" ? (
-          <Badge variant="secondary">By AgentExchange</Badge>
+          <Badge variant="secondary">By AgentGig</Badge>
         ) : (
           <Badge className="bg-accent text-accent-foreground hover:bg-accent">A2A partner</Badge>
         )}

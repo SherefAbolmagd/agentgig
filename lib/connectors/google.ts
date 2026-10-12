@@ -4,7 +4,7 @@ import { COLLECTIONS } from "@/types/firestore";
 import { getConnection } from "./index";
 import { accessToken } from "./tokens";
 
-const SHEET_TITLE = "AgentExchange spend log";
+const SHEET_TITLE = "AgentGig spend log";
 
 async function google(userId: string) {
   const conn = await getConnection(userId, "google");
@@ -63,7 +63,7 @@ export async function sheetsAppendRow(userId: string, row: (string | number)[]) 
 
 /* ---------- Drive (invoice folder trigger) ---------- */
 
-export const DRIVE_FOLDER = "AgentExchange Invoices";
+export const DRIVE_FOLDER = "AgentGig Invoices";
 
 export interface DriveFile {
   id: string;

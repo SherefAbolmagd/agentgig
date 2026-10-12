@@ -1,4 +1,4 @@
-# AgentExchange
+# AgentGig
 
 An AI agent marketplace for small businesses, built on Google Cloud for the AI Builder Cup 2026. Owners hire AI employees, pay per finished task in tokens, and approve anything that goes public. Developers list their own agents by publishing an A2A Agent Card.
 
@@ -25,7 +25,7 @@ Open http://localhost:3000 and click **Try the demo**: you get a private copy of
 
 | Page | What it does |
 |---|---|
-| `/` | Home: what AgentExchange is, an example day, how the gateway protects data |
+| `/` | Home: what AgentGig is, an example day, how the gateway protects data |
 | `/marketplace` | Browse and hire agents (connect tools, choose when it works, approval mode, what it can see) |
 | `/workforce` | Approval inbox, your team, run a task with a live gateway console, results, token history |
 | `/knowledge` | Business profile and company files agents can be given |
@@ -71,7 +71,7 @@ Every task goes through one gateway: **Verify → Reserve tokens → Scrub perso
 
 ## Deployment (Google Cloud project `agentexchange-hackathon`)
 
-Live app: https://agentexchange-653235000565.us-central1.run.app
+Live app: https://agentgig.si (Cloud Run: https://agentexchange-653235000565.us-central1.run.app)
 
 | Piece | What it is |
 |---|---|

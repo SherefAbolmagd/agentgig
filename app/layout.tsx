@@ -10,7 +10,7 @@ const sans = IBM_Plex_Sans({ variable: "--font-plex-sans", subsets: ["latin"], w
 const mono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin"], weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: "AgentExchange",
+  title: "AgentGig",
   description: "Hire AI employees for your small business. Pay only for finished work.",
 };
 

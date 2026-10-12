@@ -40,7 +40,7 @@ export async function createCheckout(userId: string, email: string | undefined, 
         price_data: {
           currency: "usd",
           unit_amount: b.amountCents,
-          product_data: { name: `AgentExchange · ${b.label}`, description: "Task tokens for your AI employees. Tokens don't expire." },
+          product_data: { name: `AgentGig · ${b.label}`, description: "Task tokens for your AI employees. Tokens don't expire." },
         },
       },
     ],

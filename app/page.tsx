@@ -90,7 +90,7 @@ export default function Home() {
               <p className="text-sm text-muted-foreground">A new invoice, a customer message or a schedule starts a task.</p>
             </Node>
             <Arrow />
-            <Node eyebrow="2 · AgentExchange gateway" title="Checks before any work" dark>
+            <Node eyebrow="2 · AgentGig gateway" title="Checks before any work" dark>
               <Check icon={<Coins />}>Holds tokens; rejects the task if your balance is too low</Check>
               <Check icon={<ShieldCheck />}>Removes emails, phone and card numbers (Cloud DLP)</Check>
               <Check icon={<BadgeCheck />}>Uses your sign-ins on the agent&apos;s behalf</Check>

@@ -11,7 +11,7 @@ import type { AgentDoc, TriggerOption } from "@/types/firestore";
 export type SeedAgent = Omit<AgentDoc, "listedAt">;
 
 const MANUAL: TriggerOption = { id: "manual", label: "Only when I click Run", type: "manual" };
-const LABS = { name: "AgentExchange Labs" };
+const LABS = { name: "AgentGig Labs" };
 const fresh = { rating: null, taskCount: 0, status: "listed" } as const;
 
 export const SEED_AGENTS: SeedAgent[] = [

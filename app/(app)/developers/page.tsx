@@ -32,9 +32,9 @@ const EXAMPLE = `{
   "version": "1.0.0",
   "capabilities": {
     "extensions": [
-      { "uri": "https://agentexchange.dev/ext/pricing/v1",
+      { "uri": "https://agentgig.si/ext/pricing/v1",
         "params": { "tokensPerTask": 6, "category": "Finance" } },
-      { "uri": "https://agentexchange.dev/ext/listing/v1",
+      { "uri": "https://agentgig.si/ext/listing/v1",
         "params": { "tools": ["google_sheets"], "timeSaved": "4 h/month" } }
     ]
   },
