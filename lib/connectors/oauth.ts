@@ -75,7 +75,7 @@ export function isConfigured(provider: Provider): boolean {
 }
 
 function redirectUri(provider: Provider, origin: string) {
-  return `${env().APP_URL ?? origin}/api/connections/${provider}/callback`;
+  return `${env().PUBLIC_URL ?? env().APP_URL ?? origin}/api/connections/${provider}/callback`;
 }
 
 const STATE_TTL_MS = 10 * 60_000;

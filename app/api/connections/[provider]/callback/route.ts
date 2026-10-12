@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /** GET /api/connections/{provider}/callback — the provider redirects here after consent. */
 export async function GET(req: Request, { params }: { params: Promise<{ provider: string }> }) {
   const url = new URL(req.url);
-  const base = env().APP_URL ?? url.origin;
+  const base = env().PUBLIC_URL ?? env().APP_URL ?? url.origin;
   const back = (path: string, query: Record<string, string>) => NextResponse.redirect(`${base}${path}${path.includes("?") ? "&" : "?"}${new URLSearchParams(query)}`, 303);
   const provider = (await params).provider;
 

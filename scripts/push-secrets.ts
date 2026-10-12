@@ -81,7 +81,7 @@ async function main() {
   const gcloud = process.platform === "win32" ? `${process.env.LOCALAPPDATA}\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.cmd` : "gcloud";
   const mapping = present.map((k) => `${k}=${secretId(k)}:latest`).join(",");
   console.log(`Attaching ${present.length} secret(s) to Cloud Run ${SERVICE}…`);
-  execFileSync(gcloud, ["run", "services", "update", SERVICE, "--region", REGION, "--project", PROJECT, "--update-secrets", mapping, "--quiet"], {
+  execFileSync(process.platform === "win32" ? `"${gcloud}"` : gcloud, ["run", "services", "update", SERVICE, "--region", REGION, "--project", PROJECT, "--update-secrets", mapping, "--quiet"], {
     stdio: ["ignore", "ignore", "inherit"],
     shell: process.platform === "win32",
   });

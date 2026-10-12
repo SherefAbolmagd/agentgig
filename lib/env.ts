@@ -18,6 +18,12 @@ const ServerEnvSchema = z.object({
    * TASKS_SERVICE_ACCOUNT. When unset (local dev), triggered work runs inline.
    */
   APP_URL: z.url().optional(),
+  /**
+   * Custom domain users see (e.g. https://agentgig.si), used for OAuth and
+   * checkout redirects. Falls back to APP_URL, which stays the run.app URL
+   * because Scheduler, Pub/Sub and Cloud Tasks tokens use it as audience.
+   */
+  PUBLIC_URL: z.url().optional(),
   TASKS_QUEUE: z.string().default("agent-tasks"),
   TASKS_LOCATION: z.string().default("us-central1"),
   TASKS_SERVICE_ACCOUNT: z.string().optional(),

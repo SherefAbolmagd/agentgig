@@ -16,5 +16,5 @@ export const POST = handle(async (req) => {
   if (caller.isAnonymous) throw new GatewayError("UNAUTHENTICATED", "Create a free account to buy tokens; demo sandboxes can't be charged.");
   await consume("topupsPerUser", caller.uid);
   const { bundle } = await readJson(req, z.object({ bundle: z.enum(Object.keys(BUNDLES) as [BundleId, ...BundleId[]]) }));
-  return { url: await createCheckout(caller.uid, caller.email, bundle, env().APP_URL ?? new URL(req.url).origin) };
+  return { url: await createCheckout(caller.uid, caller.email, bundle, env().PUBLIC_URL ?? env().APP_URL ?? new URL(req.url).origin) };
 });
