@@ -8,7 +8,20 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/lib/client/api";
-import { DmConciergeForm, InventoryForm, OnboardingForm, ReviewForm, RotaForm } from "./agent-forms";
+import {
+  BookingForm,
+  BookkeeperForm,
+  DmConciergeForm,
+  InventoryForm,
+  LeadForm,
+  NewsletterForm,
+  OnboardingForm,
+  OrderDeskForm,
+  RevenueForm,
+  ReviewForm,
+  RotaForm,
+  WinbackForm,
+} from "./agent-forms";
 import type { WithId } from "@/lib/client/firestore";
 import { TOOL_LABELS } from "@/lib/tools";
 import { cn } from "@/lib/utils";
@@ -164,6 +177,13 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
       {agent.slug === "reviewpulse" && <ReviewForm agent={agent} busy={busy} run={run} />}
       {agent.slug === "rotabuilder" && <RotaForm agent={agent} busy={busy} run={run} />}
       {agent.slug === "onboarding-buddy" && <OnboardingForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "order-desk" && <OrderDeskForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "winback" && <WinbackForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "revenue-pulse" && <RevenueForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "newsletter-writer" && <NewsletterForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "lead-followup" && <LeadForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "bookkeeper" && <BookkeeperForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "booking-prep" && <BookingForm agent={agent} busy={busy} run={run} />}
 
       {agent.slug === "echosocial" && (
         <form onSubmit={submitEchoSocial} className="grid gap-3">

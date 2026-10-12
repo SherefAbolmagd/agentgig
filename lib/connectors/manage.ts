@@ -3,16 +3,13 @@ import { db } from "@/lib/firebase-admin";
 import { GatewayError } from "@/lib/errors";
 import { deleteSecret } from "@/lib/secrets";
 import { COLLECTIONS, type ConnectionDoc, type ToolProvider } from "@/types/firestore";
-import type { Provider } from "./index";
+import { PROVIDERS, providerForTool as forTool, type Provider } from "@/lib/integrations";
 
-export const PROVIDERS: Provider[] = ["google", "linkedin", "slack"];
+export { PROVIDERS };
 
-/** Which OAuth provider a tool belongs to; tools without one are used manually. */
+/** Which provider a tool belongs to; tools without one are used manually. */
 export function providerForTool(tool: ToolProvider): Provider | null {
-  if (tool === "google_drive" || tool === "gmail" || tool === "google_sheets") return "google";
-  if (tool === "linkedin") return "linkedin";
-  if (tool === "slack") return "slack";
-  return null;
+  return forTool(tool);
 }
 
 export function parseProvider(raw: string): Provider {

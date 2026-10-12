@@ -27,6 +27,10 @@ const KEYS = [
   "SLACK_CLIENT_ID",
   "SLACK_CLIENT_SECRET",
   "SLACK_SIGNING_SECRET",
+  "XERO_CLIENT_ID",
+  "XERO_CLIENT_SECRET",
+  "QUICKBOOKS_CLIENT_ID",
+  "QUICKBOOKS_CLIENT_SECRET",
 ] as const;
 
 const sm = new SecretManagerServiceClient();
@@ -81,7 +85,7 @@ async function main() {
   const gcloud = process.platform === "win32" ? `${process.env.LOCALAPPDATA}\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.cmd` : "gcloud";
   const mapping = present.map((k) => `${k}=${secretId(k)}:latest`).join(",");
   console.log(`Attaching ${present.length} secret(s) to Cloud Run ${SERVICE}…`);
-  execFileSync(process.platform === "win32" ? `"${gcloud}"` : gcloud, ["run", "services", "update", SERVICE, "--region", REGION, "--project", PROJECT, "--update-secrets", mapping, "--quiet"], {
+  execFileSync(process.platform === "win32" ? `"${gcloud}"` : gcloud, ["run", "services", "update", SERVICE, "--region", REGION, "--project", PROJECT, "--update-secrets", mapping, ...(process.env.QUICKBOOKS_ENV ? ["--update-env-vars", `QUICKBOOKS_ENV=${process.env.QUICKBOOKS_ENV}`] : []), "--quiet"], {
     stdio: ["ignore", "ignore", "inherit"],
     shell: process.platform === "win32",
   });

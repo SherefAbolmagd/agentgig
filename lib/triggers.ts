@@ -181,6 +181,17 @@ function scheduledInput(agent: AgentDoc, user: UserDoc, hire: HireDoc): Record<s
       return p?.website && p.audience ? { brandUrl: p.website, audience: p.audience, tone: "Friendly" } : null;
     case "vat.summary":
       return { period: "last-month" };
+    case "stock.monitor":
+    case "revenue.weekly":
+    case "newsletter.draft":
+    case "meetings.brief":
+      return {};
+    case "customers.winback":
+      return { inactiveDays: 60 };
+    case "leads.followup":
+      return { sinceDays: new Date().getUTCDay() === 1 ? 3 : 1 };
+    case "bills.book":
+      return { period: "last-month" };
     default:
       return agent.source === "a2a" ? { request: `Scheduled run: ${hire.trigger.label}` } : null;
   }

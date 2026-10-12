@@ -109,3 +109,47 @@ export async function driveDownload(userId: string, fileId: string): Promise<Buf
   if (!res.ok) throw new Error(`Drive download ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
+
+/* ---------- Calendar ---------- */
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  location: string | null;
+  description: string | null;
+  attendees: { email: string; name: string | null }[];
+  meetLink: string | null;
+}
+
+/** Events on the owner's primary calendar between two instants, external meetings only (with attendees). */
+export async function calendarEvents(userId: string, from: Date, to: Date): Promise<CalendarEvent[] | null> {
+  const g = await google(userId);
+  if (!g) return null;
+  const params = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "25" });
+  const data = await call<{
+    items: {
+      id: string;
+      summary?: string;
+      start: { dateTime?: string; date?: string };
+      end: { dateTime?: string; date?: string };
+      location?: string;
+      description?: string;
+      hangoutLink?: string;
+      attendees?: { email: string; displayName?: string; self?: boolean; resource?: boolean }[];
+    }[];
+  }>(g.token, `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`);
+  return data.items
+    .filter((e) => e.start.dateTime && (e.attendees ?? []).some((a) => !a.self && !a.resource))
+    .map((e) => ({
+      id: e.id,
+      title: e.summary ?? "(no title)",
+      start: e.start.dateTime!,
+      end: e.end.dateTime ?? e.start.dateTime!,
+      location: e.location ?? null,
+      description: e.description?.slice(0, 2000) ?? null,
+      attendees: (e.attendees ?? []).filter((a) => !a.self && !a.resource).map((a) => ({ email: a.email, name: a.displayName ?? null })),
+      meetLink: e.hangoutLink ?? null,
+    }));
+}

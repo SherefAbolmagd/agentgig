@@ -27,10 +27,17 @@ export type ToolProvider =
   | "google_drive"
   | "gmail"
   | "google_sheets"
+  | "google_calendar"
   | "google_business"
   | "slack"
   | "discord"
   | "shopify"
+  | "woocommerce"
+  | "stripe"
+  | "mailchimp"
+  | "hubspot"
+  | "xero"
+  | "quickbooks"
   | "bank_feed";
 
 /* ---------- users/{uid} ---------- */
@@ -101,6 +108,8 @@ export interface AgentDoc {
   auth?: { type: "apiKey"; header: string; secretRef: string } | null;
   version?: string;
   protocolVersion?: string;
+  /** Built against the vendor's API but not yet tested with a live account. */
+  beta?: boolean;
 }
 
 /* ---------- hires/{uid}_{slug} ---------- */

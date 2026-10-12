@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GatewayError } from "@/lib/errors";
 import { gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { storeProducts } from "@/lib/connectors/store";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, groundingPrompt } from "./types";
 
@@ -10,7 +11,8 @@ import { defineAgent, groundingPrompt } from "./types";
  */
 
 export const InventoryInput = z.object({
-  stockCsv: z.string().trim().min(10).max(200_000),
+  /** Optional when a Shopify or WooCommerce store is connected. */
+  stockCsv: z.string().trim().min(10).max(200_000).optional(),
   leadTimeDays: z.number().int().min(0).max(60).default(3),
   coverDays: z.number().int().min(1).max(90).default(14),
 });
@@ -119,6 +121,7 @@ export type InventoryOutput = {
   totalCost: number | null;
   emails: { supplier: string; to: string | null; subject: string; body: string }[];
   summary: string;
+  source: string;
 };
 
 export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
@@ -130,15 +133,24 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
   scrubFields: [],
   files: null,
 
-  async run({ input, grounding }) {
-    const products = analyseStock(parseStockCsv(input.stockCsv), input.leadTimeDays, input.coverDays);
+  async run({ input, grounding, userId }) {
+    let lines: StockLine[];
+    let source = "your stock file";
+    if (input.stockCsv) lines = parseStockCsv(input.stockCsv);
+    else {
+      const store = await storeProducts(userId);
+      if (!store) throw new GatewayError("INVALID_INPUT", "Connect Shopify or WooCommerce, or paste a stock export.");
+      lines = store.products;
+      source = store.source === "shopify" ? "Shopify" : "WooCommerce";
+    }
+    const products = analyseStock(lines, input.leadTimeDays, input.coverDays);
     const reorders = products.filter((p) => p.reorderQty > 0);
     const costs = reorders.map((r) => r.reorderCost);
     const totalCost = costs.every((c) => c !== null) ? Math.round(costs.reduce((s, c) => s + (c ?? 0), 0) * 100) / 100 : null;
 
     if (!reorders.length) {
       return {
-        output: { products, reorders, totalCost: 0, emails: [], summary: "Everything has enough stock for now. Nothing to reorder." },
+        output: { products, reorders, totalCost: 0, emails: [], summary: "Everything has enough stock for now. Nothing to reorder.", source },
         model: "rules",
         latencyMs: 0,
         usage: { inputTokens: 0, outputTokens: 0 },
@@ -158,7 +170,7 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
       thinkingBudget: 0,
     });
     const emails = res.data.emails.map((e) => ({ ...e, to: bySupplier[e.supplier]?.[0]?.supplierEmail ?? null }));
-    return { ...res, output: { products, reorders, totalCost, emails, summary: res.data.summary } };
+    return { ...res, output: { products, reorders, totalCost, emails, summary: res.data.summary, source }, notes: [`Read ${products.length} products from ${source}`] };
   },
 
   approval(o) {

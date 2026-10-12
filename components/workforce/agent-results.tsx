@@ -47,16 +47,19 @@ export function DeliveryLinks({ delivery }: { delivery?: Out }) {
   );
 }
 
-export function ReplyResult({ o, kind }: { o: Out; kind: "dm" | "review" }) {
+export function ReplyResult({ o, kind }: { o: Out; kind: "dm" | "review" | "order" }) {
   const reply = String(o.reply ?? "");
-  const flagged = kind === "dm" ? !!o.needsHuman : !!o.urgent;
+  const flagged = kind === "review" ? !!o.urgent : !!o.needsHuman;
   return (
     <div className="grid gap-3">
       {flagged && (
         <div className="flex gap-2 rounded-lg bg-destructive-soft p-3 text-sm text-destructive">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <span>{kind === "dm" ? `Needs you: ${String(o.reason ?? "")}` : String(o.internalNote ?? "")}</span>
+          <span>{kind === "review" ? String(o.internalNote ?? "") : `Needs you: ${String(o.reason ?? "")}`}</span>
         </div>
+      )}
+      {kind === "order" && (
+        <p className="whitespace-pre-line rounded-lg bg-secondary px-3 py-2 font-mono text-xs">{o.orderSummary ? String(o.orderSummary) : "No matching order found."}</p>
       )}
       <blockquote className="whitespace-pre-line rounded-lg border bg-background p-4 text-sm">{reply}</blockquote>
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -238,5 +241,193 @@ export function OnboardingResult({ o }: { o: Out }) {
         </div>
       )}
     </div>
+  );
+}
+
+const amount = (n: unknown, currency: unknown) => {
+  try {
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency: String(currency || "GBP").toUpperCase() }).format(Number(n ?? 0));
+  } catch {
+    return `${Number(n ?? 0).toFixed(2)} ${String(currency ?? "")}`;
+  }
+};
+
+interface Email {
+  label: string;
+  subject: string;
+  body: string;
+}
+
+/** Drafted emails, one card each, with copy buttons. */
+export function EmailsResult({ emails, empty }: { emails: Email[]; empty: string }) {
+  if (!emails.length) return <p className="text-sm text-muted-foreground">{empty}</p>;
+  return (
+    <ul className="grid gap-2">
+      {emails.map((e, i) => (
+        <li key={i} className="grid gap-2 rounded-lg border bg-background p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="min-w-0">
+              <span className="text-muted-foreground">To {e.label}: </span>
+              <b className="font-medium">{e.subject}</b>
+            </p>
+            <CopyButton text={`${e.subject}\n\n${e.body}`} label="Copy" />
+          </div>
+          <p className="whitespace-pre-line text-muted-foreground">{e.body}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function WinbackResult({ o }: { o: Out }) {
+  const skipped = Number(o.skippedNoConsent ?? 0);
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm">
+        From {String(o.source ?? "your store")}: {(o.customers as unknown[] | undefined)?.length ?? 0} lapsed customers chosen
+        {skipped > 0 && `, ${skipped} skipped because they didn't agree to marketing emails`}.
+      </p>
+      <EmailsResult emails={(o.emails as Email[]) ?? []} empty="Nobody matched, so no emails were drafted." />
+    </div>
+  );
+}
+
+export function RevenueResult({ o }: { o: Out }) {
+  const cur = o.currency;
+  const change = o.changePct as number | null;
+  const tiles: [string, string, string?][] = [
+    [`Last ${o.periodDays} days`, amount(o.grossThisPeriod, cur), change === null ? undefined : `${change > 0 ? "+" : ""}${change}% on the period before`],
+    ["Refunds", amount(o.refunds, cur)],
+    ["MRR", amount(o.mrr, cur), `${o.activeSubscriptions} active subscriptions`],
+    ["Needs chasing", `${(o.overdueInvoices as unknown[]).length + (o.failedPayments as unknown[]).length}`, "overdue invoices and failed payments"],
+  ];
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm font-medium">{String(o.headline ?? "")}</p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {tiles.map(([label, value, hint]) => (
+          <div key={label} className="rounded-lg border bg-background p-3">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="font-display text-lg font-bold">{value}</p>
+            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+          </div>
+        ))}
+      </div>
+      <ul className="grid list-disc gap-1 pl-5 text-sm">
+        {((o.observations as string[]) ?? []).map((x) => (
+          <li key={x}>{x}</li>
+        ))}
+      </ul>
+      <EmailsResult emails={(o.reminders as Email[]) ?? []} empty="Nobody to remind this time." />
+    </div>
+  );
+}
+
+export function NewsletterResult({ o }: { o: Out }) {
+  const sections = (o.sections as { heading: string; body: string }[]) ?? [];
+  return (
+    <article className="grid max-w-xl gap-3 rounded-xl border bg-background p-4 text-sm">
+      <header>
+        <p className="font-semibold">{String(o.subject ?? "")}</p>
+        <p className="text-xs text-muted-foreground">{String(o.previewText ?? "")}</p>
+      </header>
+      {sections.map((s) => (
+        <section key={s.heading} className="grid gap-1">
+          <h4 className="font-display font-bold">{s.heading}</h4>
+          <p className="whitespace-pre-line text-muted-foreground">{s.body}</p>
+        </section>
+      ))}
+      {!!o.ctaUrl && <span className="justify-self-start rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">{String(o.ctaLabel ?? "")}</span>}
+    </article>
+  );
+}
+
+export function LeadResult({ o }: { o: Out }) {
+  return <EmailsResult emails={(o.emails as Email[]) ?? []} empty="No new leads with an email address in this period." />;
+}
+
+interface Bill {
+  key: string;
+  supplier: string;
+  invoiceNumber: string | null;
+  issueDate: string | null;
+  currency: string;
+  total: number;
+  problem: string | null;
+}
+
+export function BookkeeperResult({ o }: { o: Out }) {
+  const toBook = (o.toBook as Bill[]) ?? [];
+  const held = (o.heldBack as Bill[]) ?? [];
+  const system = o.system === "xero" ? "Xero" : "QuickBooks";
+  const rows = [...toBook.map((b) => ({ ...b, held: false })), ...held.map((b) => ({ ...b, held: true }))];
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm">
+        {toBook.length} to book in {system}
+        {held.length > 0 && `, ${held.length} held back`}
+        {Number(o.alreadyBooked) > 0 && `, ${o.alreadyBooked} already booked earlier`}.
+      </p>
+      {rows.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((b) => (
+                <TableRow key={b.key}>
+                  <TableCell>
+                    {b.supplier}
+                    {b.invoiceNumber && <span className="block text-xs text-muted-foreground">#{b.invoiceNumber}</span>}
+                  </TableCell>
+                  <TableCell className="text-xs">{b.issueDate ?? "–"}</TableCell>
+                  <TableCell className="text-right font-mono text-[13px]">{amount(b.total, b.currency)}</TableCell>
+                  <TableCell className={cn("text-xs", b.held && "text-destructive")}>{b.held ? `Held back: ${b.problem}` : "Ready"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function BookingResult({ o }: { o: Out }) {
+  const meetings = (o.meetings as { title: string; start: string; who: string; purpose: string; talkingPoints: string[]; ask: string; link: string | null }[]) ?? [];
+  if (!meetings.length) return <p className="text-sm text-muted-foreground">No meetings with outside people on {String(o.day)}.</p>;
+  return (
+    <ul className="grid gap-2">
+      {meetings.map((m, i) => (
+        <li key={i} className="grid gap-1.5 rounded-lg border bg-background p-3 text-sm">
+          <p className="flex flex-wrap items-baseline justify-between gap-2">
+            <b className="font-medium">{m.title}</b>
+            <span className="text-xs text-muted-foreground">{new Date(m.start).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+          </p>
+          <p className="text-xs text-muted-foreground">With {m.who}</p>
+          <p>{m.purpose}</p>
+          <ul className="list-disc pl-5 text-muted-foreground">
+            {m.talkingPoints.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+          <p>
+            <span className="text-muted-foreground">Ask: </span>
+            {m.ask}
+          </p>
+          {m.link && (
+            <a href={m.link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+              <ExternalLink className="size-3" /> Join link
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

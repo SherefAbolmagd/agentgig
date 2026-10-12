@@ -6,7 +6,7 @@ import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
 import { putSecret } from "@/lib/secrets";
 import { COLLECTIONS } from "@/types/firestore";
-import type { Provider } from "./index";
+import type { OAuthProvider as Provider } from "@/lib/integrations";
 
 /**
  * OAuth 2.0 authorization-code flow (with PKCE where the provider supports
@@ -23,6 +23,8 @@ interface ProviderConfig {
   clientSecret?: string;
   pkce: boolean;
   extraAuthParams?: Record<string, string>;
+  /** Send client credentials as HTTP Basic auth instead of in the body (QuickBooks, Xero). */
+  basicAuth?: boolean;
 }
 
 export function providerConfig(provider: Provider): ProviderConfig {
@@ -30,7 +32,7 @@ export function providerConfig(provider: Provider): ProviderConfig {
   switch (provider) {
     case "google":
       return {
-        label: "Google (Drive, Gmail, Sheets)",
+        label: "Google (Drive, Gmail, Sheets, Calendar)",
         authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
         scopes: [
@@ -40,6 +42,7 @@ export function providerConfig(provider: Provider): ProviderConfig {
           "https://www.googleapis.com/auth/drive.file",
           "https://www.googleapis.com/auth/gmail.compose",
           "https://www.googleapis.com/auth/spreadsheets",
+          "https://www.googleapis.com/auth/calendar.readonly",
         ],
         clientId: e.GOOGLE_OAUTH_CLIENT_ID,
         clientSecret: e.GOOGLE_OAUTH_CLIENT_SECRET,
@@ -66,7 +69,38 @@ export function providerConfig(provider: Provider): ProviderConfig {
         clientSecret: e.SLACK_CLIENT_SECRET,
         pkce: false,
       };
+    case "xero":
+      return {
+        label: "Xero",
+        authorizeUrl: "https://login.xero.com/identity/connect/authorize",
+        tokenUrl: "https://identity.xero.com/connect/token",
+        scopes: ["openid", "profile", "email", "offline_access", "accounting.transactions", "accounting.contacts"],
+        clientId: e.XERO_CLIENT_ID,
+        clientSecret: e.XERO_CLIENT_SECRET,
+        pkce: true,
+        basicAuth: true,
+      };
+    case "quickbooks":
+      return {
+        label: "QuickBooks",
+        authorizeUrl: "https://appcenter.intuit.com/connect/oauth2",
+        tokenUrl: "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+        scopes: ["com.intuit.quickbooks.accounting", "openid", "email"],
+        clientId: e.QUICKBOOKS_CLIENT_ID,
+        clientSecret: e.QUICKBOOKS_CLIENT_SECRET,
+        pkce: false,
+        basicAuth: true,
+      };
   }
+}
+
+/** Token endpoint call with the provider's preferred client authentication. */
+async function tokenRequest(c: ProviderConfig, params: Record<string, string>) {
+  const body = new URLSearchParams(c.basicAuth ? params : { ...params, client_id: c.clientId!, client_secret: c.clientSecret! });
+  const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded", accept: "application/json" };
+  if (c.basicAuth) headers.authorization = "Basic " + Buffer.from(c.clientId + ":" + c.clientSecret).toString("base64");
+  const res = await fetch(c.tokenUrl, { method: "POST", headers, body, signal: AbortSignal.timeout(15_000) });
+  return { res, json: (await res.json().catch(() => ({}))) as Record<string, unknown> };
 }
 
 export function isConfigured(provider: Provider): boolean {
@@ -113,7 +147,7 @@ export interface StoredTokens {
 }
 
 /** Finishes a connection: checks state, exchanges the code, stores tokens, writes the connection doc. */
-export async function finishConnect(provider: Provider, code: string, state: string, origin: string): Promise<{ returnTo: string }> {
+export async function finishConnect(provider: Provider, code: string, state: string, origin: string, extra: { realmId?: string } = {}): Promise<{ returnTo: string }> {
   const stateRef = db().collection("oauth_states").doc(state);
   const saved = (await stateRef.get()).data() as
     | { userId: string; provider: Provider; verifier: string | null; returnTo: string; expireAt: Timestamp }
@@ -123,21 +157,17 @@ export async function finishConnect(provider: Provider, code: string, state: str
     throw new GatewayError("UNAUTHENTICATED", "That sign-in link expired. Start the connection again.");
   }
   const c = providerConfig(provider);
-  const body = new URLSearchParams({
+  const { res, json } = await tokenRequest(c, {
     grant_type: "authorization_code",
     code,
     redirect_uri: redirectUri(provider, origin),
-    client_id: c.clientId!,
-    client_secret: c.clientSecret!,
     ...(saved.verifier && { code_verifier: saved.verifier }),
   });
-  const res = await fetch(c.tokenUrl, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(15_000) });
-  const json = (await res.json()) as Record<string, unknown>;
   if (!res.ok || json.ok === false || json.error) {
     throw new GatewayError("AGENT_FAILED", `${c.label} refused the connection: ${String(json.error_description ?? json.error ?? res.status)}`);
   }
 
-  const { tokens, label, meta, scopes } = await describe(provider, json);
+  const { tokens, label, meta, scopes } = await describe(provider, json, extra);
   const secretRef = await putSecret(`conn-${provider}-${saved.userId}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 255), JSON.stringify(tokens));
   await db()
     .collection(COLLECTIONS.connections)
@@ -160,7 +190,7 @@ export async function finishConnect(provider: Provider, code: string, state: str
 }
 
 /** Normalises each provider's token response and looks up who connected. */
-async function describe(provider: Provider, json: Record<string, unknown>) {
+async function describe(provider: Provider, json: Record<string, unknown>, extra: { realmId?: string }) {
   const expiresIn = typeof json.expires_in === "number" ? json.expires_in : undefined;
   if (provider === "slack") {
     const team = json.team as { name?: string; id?: string } | undefined;
@@ -176,6 +206,17 @@ async function describe(provider: Provider, json: Record<string, unknown>) {
     ...(json.refresh_token ? { refresh_token: String(json.refresh_token) } : {}),
     ...(expiresIn ? { expires_at: Date.now() + expiresIn * 1000 } : {}),
   };
+  if (provider === "xero") {
+    // Xero tokens are per user; the organisation ("tenant") comes from /connections.
+    const tenants = (await (await fetch("https://api.xero.com/connections", { headers: { authorization: "Bearer " + tokens.access_token } })).json()) as { tenantId: string; tenantName: string; tenantType: string }[];
+    const org = tenants.find((t) => t.tenantType === "ORGANISATION") ?? tenants[0];
+    if (!org) throw new GatewayError("INVALID_INPUT", "Your Xero login has no organisation. Create or select one in Xero first.");
+    return { tokens, label: "Xero · " + org.tenantName, meta: { tenantId: org.tenantId }, scopes: String(json.scope ?? "").split(" ") };
+  }
+  if (provider === "quickbooks") {
+    if (!extra.realmId) throw new GatewayError("INVALID_INPUT", "QuickBooks didn't say which company to connect. Try again.");
+    return { tokens, label: "QuickBooks · company " + extra.realmId, meta: { realmId: extra.realmId, sandbox: process.env.QUICKBOOKS_ENV !== "production" }, scopes: ["com.intuit.quickbooks.accounting"] };
+  }
   const infoUrl = provider === "google" ? "https://openidconnect.googleapis.com/v1/userinfo" : "https://api.linkedin.com/v2/userinfo";
   const info = (await (await fetch(infoUrl, { headers: { authorization: `Bearer ${tokens.access_token}` } })).json()) as { sub?: string; email?: string; name?: string };
   return provider === "google"
@@ -183,16 +224,17 @@ async function describe(provider: Provider, json: Record<string, unknown>) {
     : { tokens, label: `LinkedIn · ${info.name ?? "profile"}`, meta: { personUrn: info.sub ? `urn:li:person:${info.sub}` : null }, scopes: String(json.scope ?? "").split(/[ ,]/) };
 }
 
-/** Refreshes an expired Google access token with its refresh token. */
-export async function refreshGoogle(tokens: StoredTokens): Promise<StoredTokens> {
-  const c = providerConfig("google");
-  const res = await fetch(c.tokenUrl, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: tokens.refresh_token!, client_id: c.clientId!, client_secret: c.clientSecret! }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  const json = (await res.json()) as { access_token?: string; expires_in?: number; error?: string };
-  if (!res.ok || !json.access_token) throw new Error(`Google token refresh failed: ${json.error ?? res.status}`);
-  return { ...tokens, access_token: json.access_token, expires_at: Date.now() + (json.expires_in ?? 3600) * 1000 };
+/**
+ * Refreshes an access token. Xero and QuickBooks rotate refresh tokens (each
+ * is single-use), so the caller must persist the returned tokens.
+ */
+export async function refreshTokens(provider: Provider, tokens: StoredTokens): Promise<StoredTokens> {
+  const c = providerConfig(provider);
+  const { res, json } = await tokenRequest(c, { grant_type: "refresh_token", refresh_token: tokens.refresh_token! });
+  if (!res.ok || typeof json.access_token !== "string") throw new Error(c.label + " token refresh failed: " + String(json.error ?? res.status));
+  return {
+    access_token: json.access_token,
+    refresh_token: typeof json.refresh_token === "string" ? json.refresh_token : tokens.refresh_token,
+    expires_at: Date.now() + (typeof json.expires_in === "number" ? json.expires_in : 3600) * 1000,
+  };
 }

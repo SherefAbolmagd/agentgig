@@ -145,6 +145,7 @@ function AgentCard({ agent: a, hired, onHire }: { agent: WithId<AgentDoc>; hired
           <Badge className="bg-accent text-accent-foreground hover:bg-accent">A2A partner</Badge>
         )}
         {preview && <Badge variant="outline">Preview</Badge>}
+        {a.beta && <Badge variant="outline">Beta</Badge>}
       </div>
       <p className="flex-1 text-sm text-muted-foreground">{a.description}</p>
       <p className="text-xs text-muted-foreground">
@@ -175,7 +176,7 @@ function AgentCard({ agent: a, hired, onHire }: { agent: WithId<AgentDoc>; hired
           </Button>
         ) : (
           <Button size="sm" onClick={onHire}>
-            Hire {a.name.split(" ")[0]}
+            Hire {a.name}
           </Button>
         )}
       </div>

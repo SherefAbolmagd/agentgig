@@ -11,7 +11,8 @@ import { slackPost } from "./slack";
  * result as ready but not sent. Nothing is ever faked.
  */
 
-export type Provider = "google" | "linkedin" | "slack";
+export type { Provider } from "@/lib/integrations";
+import type { Provider } from "@/lib/integrations";
 
 export async function getConnection(userId: string, provider: Provider): Promise<(ConnectionDoc & { id: string }) | null> {
   const snap = await db().collection(COLLECTIONS.connections).doc(`${userId}_${provider}`).get();

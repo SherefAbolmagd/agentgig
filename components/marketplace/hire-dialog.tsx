@@ -10,7 +10,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConnectionsPanel } from "@/components/connections-panel";
-import { providerForTool, type Provider } from "@/lib/client/integrations";
+import { PROVIDER_INFO, providerForTool, type Provider } from "@/lib/client/integrations";
+
+/** Tools some agents can't work without, because they read the owner's data from them. */
+const DATA_PROVIDERS: Provider[] = ["shopify", "woocommerce", "stripe", "hubspot", "mailchimp", "xero", "quickbooks"];
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { api, ApiError } from "@/lib/client/api";
 import { useKnowledge, useMe, type WithId } from "@/lib/client/firestore";
@@ -43,6 +46,8 @@ export function HireDialog({ agent, existing, onClose }: Props) {
   if (!agent) return null;
   const providers = [...new Set(agent.tools.map(providerForTool).filter((p): p is Provider => !!p))];
   const hasProfile = !!me.data?.businessProfile;
+  const dataProviders = providers.filter((p) => DATA_PROVIDERS.includes(p));
+  const needsData = dataProviders.length ? dataProviders.map((p) => PROVIDER_INFO[p].name).join(" or ") : null;
 
   async function save() {
     if (!agent) return;
@@ -83,8 +88,10 @@ export function HireDialog({ agent, existing, onClose }: Props) {
           {providers.length > 0 && (
             <Step n={1} title="Connect your tools (optional)">
               <p className="text-sm text-muted-foreground">
-                {agent.name} acts in your own accounts. We keep the sign-in in Google Secret Manager; the agent itself never sees it. Without a connection it still works, and you
-                copy the results yourself.
+                {agent.name} acts in your own accounts. We keep the access in Google Secret Manager; the agent itself never sees it.{" "}
+                {needsData
+                  ? `It reads your data from ${needsData}, so connect ${dataProviders.length > 1 ? "one of them" : "it"} before its first task.`
+                  : "Without a connection it still works, and you copy the results yourself."}
               </p>
               <ConnectionsPanel providers={providers} returnTo={`/marketplace?hire=${agent.slug}`} compact />
             </Step>
