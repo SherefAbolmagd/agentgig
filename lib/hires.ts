@@ -1,10 +1,10 @@
 import "server-only";
-import { FieldValue, type Transaction } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { db } from "./firebase-admin";
 import { GatewayError } from "./errors";
-import { TOOL_LABELS } from "./tools";
-import { COLLECTIONS, type AgentDoc, type ConnectionDoc, type HireDoc } from "@/types/firestore";
+import { COLLECTIONS, type AgentDoc, type HireDoc } from "@/types/firestore";
+import { providerForTool } from "./connectors/manage";
 
 export const HireRequest = z.object({
   agentId: z.string().regex(/^[a-z0-9-]{2,64}$/),
@@ -18,9 +18,9 @@ export const HireRequest = z.object({
 export type HireRequest = z.infer<typeof HireRequest>;
 
 /**
- * Hires (or re-configures) an agent for a user. Tool connections are
- * simulated for the hackathon: one connection doc per tool, marked
- * secretRef "simulated", reused across agents.
+ * Hires (or re-configures) an agent for a user. Connecting the agent's tools
+ * is separate (Company knowledge → Connections, or the hire wizard); an agent
+ * whose tools aren't connected still works and reports deliveries as simulated.
  */
 export async function hireAgent(userId: string, req: HireRequest): Promise<HireDoc> {
   const store = db();
@@ -39,7 +39,7 @@ export async function hireAgent(userId: string, req: HireRequest): Promise<HireD
 
   return store.runTransaction(async (tx) => {
     const existing = await tx.get(hireRef);
-    const connectionIds = await ensureConnections(tx, userId, agent);
+    const connectionIds = [...new Set(agent.tools.map(providerForTool).filter(Boolean))].map((p) => `${userId}_${p}`);
     const hire = {
       userId,
       agentId: agent.slug,
@@ -62,27 +62,6 @@ export async function releaseAgent(userId: string, agentId: string): Promise<voi
   const snap = await ref.get();
   if (!snap.exists) throw new GatewayError("NOT_HIRED", "That agent isn't on your team.");
   await ref.update({ active: false, updatedAt: FieldValue.serverTimestamp() });
-}
-
-/** Connection IDs are deterministic ({uid}_{tool}) so the read happens inside the transaction. */
-async function ensureConnections(tx: Transaction, userId: string, agent: AgentDoc): Promise<string[]> {
-  const col = db().collection(COLLECTIONS.connections);
-  const refs = agent.tools.map((tool) => col.doc(`${userId}_${tool}`));
-  const snaps = await Promise.all(refs.map((r) => tx.get(r)));
-  snaps.forEach((snap, i) => {
-    if (snap.exists) return;
-    const tool = agent.tools[i];
-    tx.set(refs[i], {
-      userId,
-      provider: tool,
-      accountLabel: `${TOOL_LABELS[tool]} (demo connection)`,
-      scopes: [],
-      secretRef: "simulated",
-      status: "active",
-      createdAt: FieldValue.serverTimestamp(),
-    } satisfies Omit<ConnectionDoc, "createdAt"> & { createdAt: FieldValue });
-  });
-  return refs.map((r) => r.id);
 }
 
 /** Keeps only "profile" and knowledge sources this user actually owns. */

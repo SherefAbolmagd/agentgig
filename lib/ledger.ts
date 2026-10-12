@@ -169,17 +169,27 @@ export async function settleTask(
 }
 
 /** Adds purchased tokens. Payment is simulated for the hackathon. */
-export async function topUp(userId: string, amount: number, description: string): Promise<{ balance: number }> {
+/**
+ * Adds purchased tokens. With `idempotencyId` (e.g. a Stripe Checkout
+ * Session ID) the same payment can be applied any number of times and
+ * credits once: the ledger row's ID is the payment ID.
+ */
+export async function topUp(userId: string, amount: number, description: string, idempotencyId?: string): Promise<{ balance: number }> {
   if (!Number.isInteger(amount) || amount <= 0 || amount > 10_000) {
     throw new GatewayError("INVALID_INPUT", "Top-up must be between 1 and 10,000 tokens.");
   }
   return ledgerTransaction(async (tx) => {
     const ref = users().doc(userId);
-    const snap = await tx.get(ref);
+    const rowRef = idempotencyId ? txns().doc(idempotencyId) : null;
+    const [snap, row] = await Promise.all([tx.get(ref), rowRef ? tx.get(rowRef) : Promise.resolve(null)]);
     if (!snap.exists) throw new GatewayError("USER_NOT_FOUND", "We couldn't find your account.");
-    const balanceAfter = (snap.data() as UserDoc).tokenBalance + amount;
+    const balance = (snap.data() as UserDoc).tokenBalance;
+    if (row?.exists) return { balance };
+    const balanceAfter = balance + amount;
     tx.update(ref, { tokenBalance: FieldValue.increment(amount), updatedAt: FieldValue.serverTimestamp() });
-    writeTxn(tx, { userId, type: "topup", amount, balanceAfter, description });
+    const data = { userId, type: "topup" as const, amount, balanceAfter, description, createdAt: FieldValue.serverTimestamp() };
+    if (rowRef) tx.set(rowRef, data);
+    else writeTxn(tx, { userId, type: "topup", amount, balanceAfter, description });
     return { balance: balanceAfter };
   });
 }

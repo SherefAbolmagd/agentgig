@@ -34,3 +34,13 @@ export async function readSecret(name: string): Promise<string> {
   cache.set(name, { value, at: Date.now() });
   return value;
 }
+
+/** Deletes a secret and all its versions. Missing secrets are ignored. */
+export async function deleteSecret(name: string): Promise<void> {
+  try {
+    await sm().deleteSecret({ name });
+  } catch (err) {
+    if ((err as { code?: number }).code !== 5 /* NOT_FOUND */) throw err;
+  }
+  cache.delete(name);
+}
