@@ -31,6 +31,7 @@ const KEYS = [
   "XERO_CLIENT_SECRET",
   "QUICKBOOKS_CLIENT_ID",
   "QUICKBOOKS_CLIENT_SECRET",
+  "COMPANIES_HOUSE_API_KEY",
 ] as const;
 
 const sm = new SecretManagerServiceClient();
