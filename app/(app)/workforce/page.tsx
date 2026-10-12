@@ -107,11 +107,11 @@ function Workforce() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tools</p>
                 {providers.map((p) => {
                   const c = conns.data.find((x) => x.provider === p && x.status === "active");
-                  const state = !c ? "Not connected" : c.secretRef === "simulated" ? "Demo" : "Connected";
+                  const state = c && c.secretRef !== "simulated" ? "Connected" : "Not connected";
                   return (
                     <p key={p} className="flex justify-between">
                       {PROVIDER_INFO[p].name}
-                      <span className={cn("font-medium", state === "Connected" ? "text-primary" : state === "Demo" ? "text-token" : "text-muted-foreground")}>{state}</span>
+                      <span className={cn("font-medium", state === "Connected" ? "text-primary" : "text-muted-foreground")}>{state}</span>
                     </p>
                   );
                 })}

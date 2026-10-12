@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GatewayError } from "@/lib/errors";
-import { gmailCreateDraft, simulated, type Delivery } from "@/lib/connectors";
+import { gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, groundingPrompt } from "./types";
 
@@ -176,13 +176,13 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
   },
 
   async deliver(o, { userId }): Promise<Delivery> {
-    if (!o.emails.length) return { simulated: false, summary: "Nothing to order" };
+    if (!o.emails.length) return { delivered: true, summary: "Nothing to order" };
     const links: { label: string; url: string }[] = [];
     for (const e of o.emails) {
       const draft = await gmailCreateDraft(userId, { to: e.to, subject: e.subject, body: e.body });
-      if (!draft) return simulated(`${o.emails.length} order email(s) ready. Connect Google to save them as Gmail drafts.`);
+      if (!draft) return notDelivered(`${o.emails.length} order email(s) ready. Connect Google to save them as Gmail drafts.`);
       links.push({ label: `Gmail draft · ${e.supplier}`, url: draft.url });
     }
-    return { simulated: false, summary: `${links.length} order email draft(s) saved in Gmail`, links };
+    return { delivered: true, summary: `${links.length} order email draft(s) saved in Gmail`, links };
   },
 });

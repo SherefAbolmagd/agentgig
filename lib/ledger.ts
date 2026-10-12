@@ -168,7 +168,7 @@ export async function settleTask(
   });
 }
 
-/** Adds purchased tokens. Payment is simulated for the hackathon. */
+/** Adds purchased tokens. */
 /**
  * Adds purchased tokens. With `idempotencyId` (e.g. a Stripe Checkout
  * Session ID) the same payment can be applied any number of times and

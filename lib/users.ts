@@ -3,8 +3,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { DEMO_USER } from "@/data/agents";
 import { db } from "./firebase-admin";
 import { hireAgent } from "./hires";
-import { connectSimulated, PROVIDERS } from "./connectors/manage";
-import { isConfigured } from "./connectors/oauth";
 import { COLLECTIONS, type UserDoc } from "@/types/firestore";
 
 export const WELCOME_TOKENS = 100;
@@ -53,8 +51,6 @@ export async function ensureUser(caller: Caller): Promise<{ user: UserDoc; creat
   });
 
   if (created && demo) {
-    // Demo sandboxes start with demo connections for providers this server has no OAuth app for.
-    for (const p of PROVIDERS) if (!isConfigured(p)) await connectSimulated(caller.uid, p);
     await hireAgent(caller.uid, { agentId: "echosocial", triggerId: "manual", approvalMode: "ask", knowledgeAccess: ["profile"] });
     await hireAgent(caller.uid, { agentId: "receipthero", triggerId: "inbox", approvalMode: "auto", knowledgeAccess: ["profile"] });
   }

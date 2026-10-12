@@ -85,7 +85,6 @@ function LinkedInPreview({ task, businessName }: { task: Task; businessName: str
       <footer className="mt-3 flex flex-wrap gap-3 border-t pt-2 text-xs text-muted-foreground">
         <span>{o.characterCount} characters</span>
         {o.editedByOwner && <span>Edited by you · EchoSocial will learn from it</span>}
-        {task.delivery?.simulated === true && <span>Publishing simulated in the demo</span>}
       </footer>
     </article>
   );

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slackPost, simulated, type Delivery } from "@/lib/connectors";
+import { slackPost, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
@@ -78,8 +78,8 @@ export const dmConcierge = defineAgent<DmConciergeInput, DmConciergeOutput>({
     const text = o.reply;
     if (o.slack) {
       const posted = await slackPost(userId, { channel: o.slack.channel, threadTs: o.slack.ts, text });
-      if (posted) return { simulated: false, summary: "Replied in the Slack thread", links: posted.url ? [{ label: "Open in Slack", url: posted.url }] : [] };
+      if (posted) return { delivered: true, summary: "Replied in the Slack thread", links: posted.url ? [{ label: "Open in Slack", url: posted.url }] : [] };
     }
-    return simulated("Reply ready. Connect Slack so DM Concierge can answer in your channel.");
+    return notDelivered("Reply ready. Connect Slack so DM Concierge can answer in your channel.");
   },
 });

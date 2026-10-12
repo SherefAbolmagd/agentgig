@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase-admin";
 import { GatewayError } from "@/lib/errors";
 import { filePart, generateJson, textPart } from "@/lib/vertex";
 import { COLLECTIONS } from "@/types/firestore";
-import { gmailCreateDraft, sheetsAppendRow, simulated, type Delivery } from "@/lib/connectors";
+import { gmailCreateDraft, sheetsAppendRow, notDelivered, type Delivery } from "@/lib/connectors";
 import { defineAgent, groundingPrompt } from "./types";
 
 export const ReceiptHeroInput = z.object({
@@ -165,7 +165,7 @@ export const receiptHero = defineAgent<ReceiptHeroInput, ReceiptHeroOutput>({
       o.verdict === "ok" ? "OK" : (o.flags.find((f) => f.severity !== "low")?.message ?? "Check"),
       new Date().toISOString().slice(0, 10),
     ]);
-    if (!sheet) return simulated("Audited. Connect Google to log invoices to your spend sheet and draft supplier emails.");
+    if (!sheet) return notDelivered("Audited. Connect Google to log invoices to your spend sheet and draft supplier emails.");
     const links = [{ label: "Spend log", url: sheet.url }];
     const problem = o.flags.find((f) => f.severity === "high");
     if (problem) {
@@ -182,7 +182,7 @@ Thank you`,
       });
       if (draft) links.push({ label: "Correction email draft", url: draft.url });
     }
-    return { simulated: false, summary: problem ? "Logged to your spend sheet and drafted a correction email" : "Logged to your spend sheet", links };
+    return { delivered: true, summary: problem ? "Logged to your spend sheet and drafted a correction email" : "Logged to your spend sheet", links };
   },
 });
 

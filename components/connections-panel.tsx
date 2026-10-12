@@ -11,9 +11,8 @@ import { cn } from "@/lib/utils";
 
 /** Starts a connection: navigates to the provider's consent screen, or creates a demo connection. */
 export async function connectProvider(provider: Provider, returnTo: string) {
-  const res = await api<{ url?: string; simulated?: boolean }>(`/api/connections/${provider}/start`, { json: { returnTo } });
-  if (res.url) window.location.assign(res.url);
-  else toast.success(`${PROVIDER_INFO[provider].name} connected in demo mode.`, { description: "Deliveries are simulated until real keys are configured." });
+  const res = await api<{ url: string }>(`/api/connections/${provider}/start`, { json: { returnTo } });
+  window.location.assign(res.url);
 }
 
 export function ConnectionsPanel({ providers = ["google", "linkedin", "slack"], returnTo, compact }: { providers?: Provider[]; returnTo: string; compact?: boolean }) {
@@ -48,8 +47,8 @@ export function ConnectionsPanel({ providers = ["google", "linkedin", "slack"], 
     <ul className="grid gap-2">
       {providers.map((p) => {
         const c = conns.data.find((x) => x.provider === p);
-        const demo = c?.secretRef === "simulated";
-        const live = !!c && c.status === "active";
+        const live = !!c && c.status === "active" && c.secretRef !== "simulated";
+        const available = !!status?.providers[p];
         return (
           <li key={p} className={cn("grid gap-2 rounded-lg border px-3 py-2.5", compact && "py-2")}>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -62,21 +61,21 @@ export function ConnectionsPanel({ providers = ["google", "linkedin", "slack"], 
               </div>
               {live ? (
                 <div className="flex items-center gap-2">
-                  <span className={cn("flex items-center gap-1 text-xs font-medium", demo ? "text-token" : "text-primary")}>
-                    <Check className="size-3.5" /> {demo ? "Demo" : "Connected"}
+                  <span className="flex items-center gap-1 text-xs font-medium text-primary">
+                    <Check className="size-3.5" /> Connected
                   </span>
                   <Button size="sm" variant="ghost" onClick={() => disconnect(p)} disabled={busy === p} aria-label={`Disconnect ${PROVIDER_INFO[p].name}`}>
                     {busy === p ? <Loader2 className="animate-spin" /> : <Unplug />}
                   </Button>
                 </div>
               ) : (
-                <Button size="sm" variant="outline" onClick={() => connect(p)} disabled={busy === p || !status}>
+                <Button size="sm" variant="outline" onClick={() => connect(p)} disabled={busy === p || !available}>
                   {busy === p ? <Loader2 className="animate-spin" /> : <PlugZap />}
-                  {status?.providers[p] ? `Connect ${PROVIDER_INFO[p].name}` : "Connect (demo)"}
+                  {available || !status ? `Connect ${PROVIDER_INFO[p].name}` : "Not available yet"}
                 </Button>
               )}
             </div>
-            {p === "slack" && live && !demo && <SlackChannelPicker current={c.meta?.defaultChannel as string | undefined} />}
+            {p === "slack" && live && <SlackChannelPicker current={c.meta?.defaultChannel as string | undefined} />}
           </li>
         );
       })}

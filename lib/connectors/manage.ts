@@ -1,11 +1,9 @@
 import "server-only";
-import { FieldValue } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin";
 import { GatewayError } from "@/lib/errors";
 import { deleteSecret } from "@/lib/secrets";
 import { COLLECTIONS, type ConnectionDoc, type ToolProvider } from "@/types/firestore";
 import type { Provider } from "./index";
-import { isConfigured, providerConfig } from "./oauth";
 
 export const PROVIDERS: Provider[] = ["google", "linkedin", "slack"];
 
@@ -20,27 +18,6 @@ export function providerForTool(tool: ToolProvider): Provider | null {
 export function parseProvider(raw: string): Provider {
   if (!(PROVIDERS as string[]).includes(raw)) throw new GatewayError("INVALID_INPUT", `Unknown connection “${raw}”.`);
   return raw as Provider;
-}
-
-/**
- * When a provider's OAuth app isn't configured on this server, connecting
- * creates a demo connection so the rest of the product still works; agents
- * report their deliveries as simulated.
- */
-export async function connectSimulated(userId: string, provider: Provider) {
-  if (isConfigured(provider)) throw new GatewayError("INVALID_INPUT", "This connection uses real sign-in.");
-  await db()
-    .collection(COLLECTIONS.connections)
-    .doc(`${userId}_${provider}`)
-    .set({
-      userId,
-      provider,
-      accountLabel: `${providerConfig(provider).label} (demo)`,
-      scopes: [],
-      secretRef: "simulated",
-      status: "active",
-      createdAt: FieldValue.serverTimestamp(),
-    } satisfies Omit<ConnectionDoc, "createdAt" | "provider"> & { provider: Provider; createdAt: FieldValue });
 }
 
 export async function disconnect(userId: string, provider: Provider) {

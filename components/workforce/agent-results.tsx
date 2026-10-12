@@ -36,7 +36,7 @@ export function DeliveryLinks({ delivery }: { delivery?: Out }) {
   const summary = delivery.summary as string | undefined;
   if (!summary && !links.length) return null;
   return (
-    <div className={cn("flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm", delivery.simulated ? "bg-token-soft text-token" : "bg-accent text-accent-foreground")}>
+    <div className={cn("flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm", delivery.delivered === false || delivery.simulated === true ? "bg-token-soft text-token" : "bg-accent text-accent-foreground")}>
       <span>{summary}</span>
       {links.map((l) => (
         <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline">

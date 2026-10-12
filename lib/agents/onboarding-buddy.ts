@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { gmailCreateDraft, simulated, type Delivery } from "@/lib/connectors";
+import { gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
@@ -62,7 +62,7 @@ export const onboardingBuddy = defineAgent<OnboardingInput, OnboardingOutput>({
 
   async deliver(o, { userId }): Promise<Delivery> {
     const draft = await gmailCreateDraft(userId, { to: o.newHireEmail, subject: o.welcomeEmail.subject, body: o.welcomeEmail.body });
-    if (!draft) return simulated("Welcome email ready. Connect Google to save it as a Gmail draft.");
-    return { simulated: false, summary: "Welcome email saved as a Gmail draft", links: [{ label: "Open draft", url: draft.url }] };
+    if (!draft) return notDelivered("Welcome email ready. Connect Google to save it as a Gmail draft.");
+    return { delivered: true, summary: "Welcome email saved as a Gmail draft", links: [{ label: "Open draft", url: draft.url }] };
   },
 });

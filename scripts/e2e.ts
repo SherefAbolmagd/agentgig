@@ -93,8 +93,9 @@ async function main() {
       const card = page.locator("article", { hasText: "VAT Reconciler" });
       await card.getByRole("button", { name: "Hire VAT" }).click();
       const dialog = page.getByRole("dialog");
-      // Demo sandboxes start with demo connections; real accounts would see "Connect Google".
-      await dialog.getByText(/\b(Demo|Connected)$/).first().waitFor();
+      // Connecting is optional and real (OAuth); the wizard offers it but doesn't require it.
+      await dialog.getByRole("button", { name: /Connect Google|Not available yet/ }).waitFor();
+      if ((await dialog.getByText(/\(demo\)|Demo/).count()) > 0) throw new Error("wizard still shows a demo connection");
       await dialog.getByLabel("Monthly token limit").fill("30");
       await shot(page, "hire-wizard");
       await dialog.getByRole("button", { name: "Hire VAT Reconciler" }).click();

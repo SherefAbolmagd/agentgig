@@ -65,6 +65,6 @@ export const reviewPulse = defineAgent<ReviewInput, ReviewOutput>({
 
   // Posting review replies needs Google Business Profile API access, which Google grants on application.
   async deliver(o): Promise<Delivery> {
-    return { simulated: false, summary: `Reply approved. Paste it into ${o.platform}: it's in the result panel with a copy button.` };
+    return { delivered: false, summary: `Reply approved. Paste it into ${o.platform}: it's in the result panel with a copy button.` };
   },
 });

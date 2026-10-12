@@ -20,7 +20,7 @@ export type HireRequest = z.infer<typeof HireRequest>;
 /**
  * Hires (or re-configures) an agent for a user. Connecting the agent's tools
  * is separate (Company knowledge → Connections, or the hire wizard); an agent
- * whose tools aren't connected still works and reports deliveries as simulated.
+ * whose tools aren't connected still works; its results are marked "not sent".
  */
 export async function hireAgent(userId: string, req: HireRequest): Promise<HireDoc> {
   const store = db();

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GatewayError } from "@/lib/errors";
-import { slackPost, simulated, type Delivery } from "@/lib/connectors";
+import { slackPost, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, groundingPrompt } from "./types";
 
@@ -143,7 +143,7 @@ export const rotaBuilder = defineAgent<RotaInput, RotaOutput>({
 
   async deliver(o, { userId }): Promise<Delivery> {
     const posted = await slackPost(userId, { text: o.slackText });
-    if (!posted) return simulated("Rota ready. Connect Slack to post it to your team channel.");
-    return { simulated: false, summary: "Posted the rota to Slack", links: posted.url ? [{ label: "Open in Slack", url: posted.url }] : [] };
+    if (!posted) return notDelivered("Rota ready. Connect Slack to post it to your team channel.");
+    return { delivered: true, summary: "Posted the rota to Slack", links: posted.url ? [{ label: "Open in Slack", url: posted.url }] : [] };
   },
 });
