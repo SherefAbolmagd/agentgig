@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { hubspotAddNote, hubspotContactUrl, hubspotNewLeads } from "@/lib/connectors/hubspot";
+import { crmAddNote, crmNewLeads, type CrmSystem } from "@/lib/connectors/crm";
 import { GatewayError } from "@/lib/errors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { deliverDrafts, type DraftEmail } from "./drafts";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
-/** Lead Follow-up: a personal first email to each new HubSpot lead, plus a note on their record. */
+/** Lead Follow-up: a personal first email to each new lead in HubSpot, Pipedrive or Zoho CRM, plus a note on their record. */
 
 export const LeadInput = z.object({ sinceDays: z.number().int().min(1).max(30).default(3) });
 export type LeadInput = z.infer<typeof LeadInput>;
@@ -13,9 +13,9 @@ export type LeadInput = z.infer<typeof LeadInput>;
 const ModelOutput = z.object({ emails: z.array(z.object({ ref: z.number().int(), subject: z.string(), body: z.string() })) });
 
 export type LeadOutput = {
+  system: CrmSystem;
   leads: { id: string; name: string; company: string | null; source: string | null; url: string }[];
   emails: (DraftEmail & { contactId: string })[];
-  portalId: number;
 };
 
 export const leadFollowup = defineAgent<LeadInput, LeadOutput>({
@@ -27,11 +27,11 @@ export const leadFollowup = defineAgent<LeadInput, LeadOutput>({
   files: null,
 
   async run({ input, grounding, userId }) {
-    const found = await hubspotNewLeads(userId, input.sinceDays);
-    if (!found) throw new GatewayError("INVALID_INPUT", "Connect HubSpot so Lead Follow-up can see your new leads.");
+    const found = await crmNewLeads(userId, input.sinceDays);
+    if (!found) throw new GatewayError("INVALID_INPUT", "Connect HubSpot, Pipedrive or Zoho CRM so Lead Follow-up can see your new leads.");
     const leads = found.leads.filter((l) => l.email).slice(0, 15);
-    const view = leads.map((l) => ({ id: l.id, name: `${l.firstName} ${l.lastName}`.trim() || "(no name)", company: l.company, source: l.source, url: hubspotContactUrl(found.portalId, l.id) }));
-    if (!leads.length) return { output: { leads: [], emails: [], portalId: found.portalId }, model: "rules", latencyMs: 0, usage: { inputTokens: 0, outputTokens: 0 } };
+    const view = leads.map((l) => ({ id: l.id, name: `${l.firstName} ${l.lastName}`.trim() || "(no name)", company: l.company, source: l.source, url: l.url }));
+    if (!leads.length) return { output: { system: found.system, leads: [], emails: [] }, model: "rules", latencyMs: 0, usage: { inputTokens: 0, outputTokens: 0 } };
     const res = await generateJson({
       tier: "flash",
       system:
@@ -45,7 +45,7 @@ export const leadFollowup = defineAgent<LeadInput, LeadOutput>({
       thinkingBudget: 0,
     });
     const emails = res.data.emails.filter((e) => leads[e.ref]).map((e) => ({ to: leads[e.ref].email, subject: e.subject, body: e.body, label: view[e.ref].name, contactId: leads[e.ref].id }));
-    return { ...res, output: { leads: view, emails, portalId: found.portalId }, notes: [`${leads.length} new leads in HubSpot from the last ${input.sinceDays} days`] };
+    return { ...res, output: { system: found.system, leads: view, emails }, notes: [`${leads.length} new leads in ${found.system} from the last ${input.sinceDays} days`] };
   },
 
   approval(o) {
@@ -54,7 +54,7 @@ export const leadFollowup = defineAgent<LeadInput, LeadOutput>({
       preview: o.leads.map((l) => l.name).slice(0, 4).join(", "),
       severity: "info",
       actions: [
-        { id: "approve", label: "Save drafts and log in HubSpot", kind: "approve" },
+        { id: "approve", label: `Save drafts and log in ${o.system ?? "your CRM"}`, kind: "approve" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
     };
@@ -62,7 +62,9 @@ export const leadFollowup = defineAgent<LeadInput, LeadOutput>({
 
   async deliver(o, { userId }) {
     const result = await deliverDrafts(userId, o.emails, "follow-up emails");
-    if (result.delivered) for (const e of o.emails) await hubspotAddNote(userId, e.contactId, `AgentGig drafted a follow-up email in Gmail: “${e.subject}”`).catch(() => false);
+    // Older results (HubSpot only) have no system field.
+    const system = o.system ?? "HubSpot";
+    if (result.delivered) for (const e of o.emails) await crmAddNote(userId, system, { kind: "lead", id: e.contactId }, `AgentGig drafted a follow-up email: “${e.subject}”`).catch(() => false);
     return result;
   },
 });

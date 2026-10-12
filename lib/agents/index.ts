@@ -1,7 +1,9 @@
+import { bookingAssistant } from "./booking-assistant";
 import { bookingPrep } from "./booking-prep";
 import { bookkeeper } from "./bookkeeper";
 import { cashflowForecast } from "./cashflow-forecast";
 import { deadlineKeeper } from "./deadline-keeper";
+import { dealNudger } from "./deal-nudger";
 import { hiringAssistant } from "./hiring-assistant";
 import { invoiceChaser } from "./invoice-chaser";
 import { meetingActions } from "./meeting-actions";
@@ -10,6 +12,7 @@ import { quoteBuilder } from "./quote-builder";
 import { reviewRequester } from "./review-requester";
 import { dmConcierge } from "./dm-concierge";
 import { echoSocial } from "./echosocial";
+import { enquiryDesk } from "./enquiry-desk";
 import { inventoryGuardian } from "./inventory-guardian";
 import { leadFollowup } from "./lead-followup";
 import { newsletterWriter } from "./newsletter-writer";
@@ -47,6 +50,9 @@ export const NATIVE_AGENTS: Record<string, AnyNativeAgent> = Object.fromEntries(
     hiringAssistant,
     deadlineKeeper,
     meetingActions,
+    bookingAssistant,
+    dealNudger,
+    enquiryDesk,
   ].map((a) => [a.slug, a]),
 );
 

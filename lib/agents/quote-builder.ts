@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
@@ -141,7 +141,7 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
       preview: o.estimatedLines ? `${o.estimatedLines} line${o.estimatedLines > 1 ? "s are" : " is"} estimated, not from your price list. Check before sending.` : o.lines.map((l) => l.description).slice(0, 3).join(", "),
       severity: o.estimatedLines ? "check" : "info",
       actions: [
-        { id: "approve", label: "Save as Gmail draft", kind: "approve" },
+        { id: "approve", label: "Save as email draft", kind: "approve" },
         { id: "edit", label: "Edit intro first", kind: "edit" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
@@ -151,8 +151,8 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
   async deliver(o, { userId }): Promise<Delivery> {
     const { db } = await import("@/lib/firebase-admin");
     const user = (await db().collection("users").doc(userId).get()).data() as { businessName?: string } | undefined;
-    const draft = await gmailCreateDraft(userId, { to: o.customerEmail, subject: `Your quote ${o.reference}`, body: quoteText(o, user?.businessName ?? "") });
-    if (!draft) return notDelivered("Quote ready. Connect Google to save it as a Gmail draft, or copy it from the result.");
-    return { delivered: true, summary: "Quote saved as a Gmail draft. Nothing was sent.", links: [{ label: "Open draft", url: draft.url }] };
+    const draft = await createEmailDraft(userId, { to: o.customerEmail, subject: `Your quote ${o.reference}`, body: quoteText(o, user?.businessName ?? "") });
+    if (!draft) return notDelivered("Quote ready. Connect Google or Microsoft 365 to save it as an email draft, or copy it from the result.");
+    return { delivered: true, summary: `Quote saved as an ${draft.app} draft. Nothing was sent.`, links: [{ label: "Open draft", url: draft.url }] };
   },
 });

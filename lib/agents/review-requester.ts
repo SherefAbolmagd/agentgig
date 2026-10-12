@@ -86,7 +86,7 @@ export const reviewRequester = defineAgent<ReviewRequestInput, ReviewRequestOutp
       preview: [s.refunded && `${s.refunded} refunded`, s.noConsent && `${s.noConsent} without marketing consent`, s.askedRecently && `${s.askedRecently} asked recently`].filter(Boolean).join(", ") || o.emails.map((e) => e.label).slice(0, 4).join(", "),
       severity: "info",
       actions: [
-        { id: "approve", label: "Save as Gmail drafts", kind: "approve" },
+        { id: "approve", label: "Save as email drafts", kind: "approve" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
     };

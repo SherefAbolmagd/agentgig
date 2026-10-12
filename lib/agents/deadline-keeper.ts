@@ -1,8 +1,10 @@
 import { z } from "zod";
-import { gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { createEmailDraft, notDelivered, selfAddress, type Delivery } from "@/lib/connectors";
 import { companyFilings, type CompanyFilings } from "@/lib/connectors/companies-house";
-import { googleSelf } from "@/lib/connectors/google";
+import { createHash } from "node:crypto";
 import { GatewayError } from "@/lib/errors";
+import { db } from "@/lib/firebase-admin";
+import { combine, deliverTasks } from "./drafts";
 import { defineAgent } from "./types";
 
 /**
@@ -127,15 +129,30 @@ export const deadlineKeeper = defineAgent<DeadlineInput, DeadlineOutput>({
 
   async deliver(o, { userId }): Promise<Delivery> {
     if (!o.deadlines.length) return { delivered: true, summary: "Nothing due" };
-    const body = [
+    return combine([await emailList(o, userId), await boardCards(o, userId)]);
+  },
+});
+
+/** Each deadline becomes one card on the task board, once (weekly runs skip ones already added). */
+async function boardCards(o: DeadlineOutput, userId: string): Promise<Delivery | null> {
+  const refs = o.deadlines.map((d) => db().collection("deadline_tasks").doc(createHash("sha256").update(`${userId}|${d.what}|${d.date}`).digest("hex").slice(0, 40)));
+  const seen = new Set((await db().getAll(...refs)).filter((s) => s.exists).map((s) => s.id));
+  const fresh = o.deadlines.filter((_, i) => !seen.has(refs[i].id));
+  if (!fresh.length) return null;
+  const made = await deliverTasks(userId, fresh.map((d) => ({ title: d.what, notes: `${d.detail} [${d.source}]`, due: d.date })));
+  if (made?.delivered) await Promise.all(refs.filter((r) => !seen.has(r.id)).map((r) => r.set({ userId, at: new Date() })));
+  return made;
+}
+
+async function emailList(o: DeadlineOutput, userId: string): Promise<Delivery> {
+  const body = [
       `Deadlines in the next ${o.lookAheadDays} days${o.company ? ` for ${o.company}` : ""}:`,
       "",
       ...o.deadlines.map((d) => `${d.date} (${d.daysLeft} days) — ${d.what}. ${d.detail}. [${d.source}]`),
       "",
       "Worked out from Companies House records and standard HMRC rules. Check HMRC or your accountant if your circumstances are unusual.",
     ].join("\n");
-    const draft = await gmailCreateDraft(userId, { to: await googleSelf(userId), subject: o.urgent ? `${o.urgent} deadline(s) in the next 2 weeks` : "Upcoming business deadlines", body });
-    if (!draft) return notDelivered("Deadlines listed in AgentGig. Connect Google to get them by email.");
-    return { delivered: true, summary: "Deadline list saved as a Gmail draft to yourself", links: [{ label: "Open draft", url: draft.url }] };
-  },
-});
+    const draft = await createEmailDraft(userId, { to: await selfAddress(userId), subject: o.urgent ? `${o.urgent} deadline(s) in the next 2 weeks` : "Upcoming business deadlines", body });
+    if (!draft) return notDelivered("Deadlines listed in AgentGig. Connect Google or Microsoft 365 to get them by email.");
+  return { delivered: true, summary: `Deadline list saved as an ${draft.app} draft to yourself`, links: [{ label: "Open draft", url: draft.url }] };
+}

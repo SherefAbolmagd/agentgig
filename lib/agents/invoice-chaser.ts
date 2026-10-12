@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { openItems } from "@/lib/connectors/accounting";
+import { ACCOUNTING_NAMES, openItems, type OpenItem } from "@/lib/connectors/accounting";
+import { squareOpenInvoices } from "@/lib/connectors/square";
 import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
 import { generateJson, textPart } from "@/lib/vertex";
@@ -64,8 +65,15 @@ export const invoiceChaser = defineAgent<ChaserInput, ChaserOutput>({
   files: null,
 
   async run({ input, grounding, userId }) {
-    const books = await openItems(userId);
-    if (!books) throw new GatewayError("INVALID_INPUT", "Connect Xero or QuickBooks so Invoice Chaser can see who owes you.");
+    // Accounting software is the source of truth; Square invoices are used only without it, so nothing is chased twice.
+    const accounts = await openItems(userId);
+    const square = accounts ? null : await squareOpenInvoices(userId);
+    const books: { system: string; name: string; receivable: OpenItem[] } | null = accounts
+      ? { system: accounts.system, name: ACCOUNTING_NAMES[accounts.system], receivable: accounts.receivable }
+      : square
+        ? { system: "square", name: "Square", receivable: square.map((i) => ({ ...i, issueDate: null })) }
+        : null;
+    if (!books) throw new GatewayError("INVALID_INPUT", "Connect Xero, QuickBooks, FreshBooks, Sage or Square so Invoice Chaser can see who owes you.");
     const today = Date.now();
     const overdue = books.receivable
       .filter((i) => i.dueDate)
@@ -115,7 +123,7 @@ export const invoiceChaser = defineAgent<ChaserInput, ChaserOutput>({
     const emails = res.data.emails
       .filter((e) => chasing[e.ref])
       .map((e) => ({ to: chasing[e.ref].email, subject: e.subject, body: e.body, label: `${chasing[e.ref].customer} (${chasing[e.ref].stage})`, key: chasing[e.ref].key }));
-    return { ...res, output: { ...base, emails }, notes: [`${overdue.length} overdue invoices in ${books.system === "xero" ? "Xero" : "QuickBooks"}; ${recentlyChased} chased in the last week`] };
+    return { ...res, output: { ...base, emails }, notes: [`${overdue.length} overdue invoices in ${books.name}; ${recentlyChased} chased in the last week`] };
   },
 
   approval(o) {
@@ -125,7 +133,7 @@ export const invoiceChaser = defineAgent<ChaserInput, ChaserOutput>({
       preview: o.noEmail.length ? `${o.noEmail.length} overdue customer${o.noEmail.length > 1 ? "s have" : " has"} no email in your books.` : o.emails.map((e) => e.label).slice(0, 3).join(", "),
       severity: o.chasing.some((c) => c.stage === "final") ? "check" : "info",
       actions: [
-        { id: "approve", label: "Save reminders as Gmail drafts", kind: "approve" },
+        { id: "approve", label: "Save reminders as email drafts", kind: "approve" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
     };

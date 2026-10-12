@@ -9,11 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/lib/client/api";
 import {
+  BookingAssistantForm,
   BookingForm,
   BookkeeperForm,
   CashflowForm,
   DeadlineForm,
+  DealNudgerForm,
   DmConciergeForm,
+  EnquiryForm,
   HiringForm,
   InvoiceChaserForm,
   InventoryForm,
@@ -200,6 +203,9 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
       {agent.slug === "hiring-assistant" && <HiringForm agent={agent} busy={busy} run={run} />}
       {agent.slug === "deadline-keeper" && <DeadlineForm agent={agent} busy={busy} run={run} />}
       {agent.slug === "meeting-actions" && <MeetingForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "booking-assistant" && <BookingAssistantForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "deal-nudger" && <DealNudgerForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "enquiry-desk" && <EnquiryForm agent={agent} busy={busy} run={run} />}
 
       {agent.slug === "echosocial" && (
         <form onSubmit={submitEchoSocial} className="grid gap-3">

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { GatewayError } from "@/lib/errors";
 import { filePart, generateJson, textPart } from "@/lib/vertex";
-import { deliverDrafts } from "./drafts";
+import { combine, deliverDrafts, deliverTasks } from "./drafts";
 import { defineAgent, groundingPrompt } from "./types";
 
 /** Meeting Notes to Actions: summary, decisions, owners and follow-up emails from rough notes. */
@@ -16,7 +16,7 @@ const ModelOutput = z.object({
   title: z.string(),
   summary: z.string().describe("Three to five sentences"),
   decisions: z.array(z.string()).max(10),
-  actions: z.array(z.object({ owner: z.string().describe("Name, or 'Unassigned'"), task: z.string(), due: z.string().describe("Date or timeframe from the notes, or 'Not set'") })).max(20),
+  actions: z.array(z.object({ owner: z.string().describe("Name, or 'Unassigned'"), task: z.string(), due: z.string().describe("YYYY-MM-DD if the notes give a date, else the timeframe in words, or 'Not set'") })).max(20),
   openQuestions: z.array(z.string()).max(8),
   followUps: z.array(z.object({ to: z.string().describe("Who it's for, by name"), subject: z.string(), body: z.string() })).max(6),
 });
@@ -60,12 +60,20 @@ export const meetingActions = defineAgent<MeetingInput, MeetingOutput>({
       preview: o.decisions[0] ?? o.summary.slice(0, 140),
       severity: "info",
       actions: [
-        { id: "approve", label: "Save follow-ups as Gmail drafts", kind: "approve" },
+        { id: "approve", label: "Save follow-ups and add actions to your task board", kind: "approve" },
         { id: "skip", label: "Just keep the notes", kind: "skip" },
       ],
     };
   },
 
-  // Addresses aren't in the notes (they're removed before the run), so drafts have no recipient yet.
-  deliver: (o, { userId }) => deliverDrafts(userId, o.followUps.map((f) => ({ to: null, subject: f.subject, body: f.body, label: f.to })), "follow-up emails"),
+  async deliver(o, { userId }) {
+    // Addresses aren't in the notes (they're removed before the run), so drafts have no recipient yet.
+    const drafts = o.followUps.length ? await deliverDrafts(userId, o.followUps.map((f) => ({ to: null, subject: f.subject, body: f.body, label: f.to })), "follow-up emails") : null;
+    const due = (d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
+    const tasks = await deliverTasks(
+      userId,
+      o.actions.map((a) => ({ title: a.owner && a.owner !== "Unassigned" ? `${a.owner}: ${a.task}` : a.task, notes: `From “${o.title}”`, due: due(a.due) })),
+    );
+    return combine([drafts, tasks]);
+  },
 });

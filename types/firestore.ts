@@ -23,6 +23,21 @@ export const COLLECTIONS = {
 } as const;
 
 export type ToolProvider =
+  | "outlook"
+  | "outlook_calendar"
+  | "square"
+  | "paypal"
+  | "calendly"
+  | "acuity"
+  | "pipedrive"
+  | "zoho_crm"
+  | "typeform"
+  | "jotform"
+  | "trello"
+  | "asana"
+  | "notion"
+  | "freshbooks"
+  | "sage"
   | "linkedin"
   | "google_drive"
   | "gmail"

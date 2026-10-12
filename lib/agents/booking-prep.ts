@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { getConnection, gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
-import { calendarEvents } from "@/lib/connectors/google";
+import { createEmailDraft, notDelivered, selfAddress, type Delivery } from "@/lib/connectors";
+import { meetings as externalMeetings } from "@/lib/connectors/mail";
 import { GatewayError } from "@/lib/errors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
@@ -34,8 +34,8 @@ export const bookingPrep = defineAgent<BookingInput, BookingOutput>({
     start.setUTCHours(0, 0, 0, 0);
     if (input.day === "tomorrow") start.setUTCDate(start.getUTCDate() + 1);
     const end = new Date(start.getTime() + 86_400_000);
-    const events = await calendarEvents(userId, start, end);
-    if (!events) throw new GatewayError("INVALID_INPUT", "Connect Google so Booking Prep can read your calendar.");
+    const events = await externalMeetings(userId, start, end);
+    if (!events) throw new GatewayError("INVALID_INPUT", "Connect Google or Microsoft 365 so Meeting Prep can read your calendar.");
     const label = start.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: tz });
     if (!events.length) return { output: { day: label, meetings: [] }, model: "rules", latencyMs: 0, usage: { inputTokens: 0, outputTokens: 0 } };
     // Names and companies (from email domains) only; no email addresses to the model.
@@ -74,13 +74,12 @@ export const bookingPrep = defineAgent<BookingInput, BookingOutput>({
 
   async deliver(o, { userId }): Promise<Delivery> {
     if (!o.meetings.length) return { delivered: true, summary: "No meetings to brief" };
-    const google = await getConnection(userId, "google");
-    const self = google?.accountLabel.split("·").pop()?.trim() ?? null;
+    const self = await selfAddress(userId);
     const body = o.meetings
       .map((m) => `${m.title} — ${m.who}\n${m.purpose}\n${m.talkingPoints.map((t) => `• ${t}`).join("\n")}\nAsk: ${m.ask}${m.link ? `\nJoin: ${m.link}` : ""}`)
       .join("\n\n");
-    const draft = await gmailCreateDraft(userId, { to: self, subject: `Meeting briefs for ${o.day}`, body });
-    if (!draft) return notDelivered("Briefs ready in AgentGig. Connect Google to get them in your inbox.");
-    return { delivered: true, summary: "Briefs saved as a Gmail draft to yourself", links: [{ label: "Open draft", url: draft.url }] };
+    const draft = await createEmailDraft(userId, { to: self, subject: `Meeting briefs for ${o.day}`, body });
+    if (!draft) return notDelivered("Briefs ready in AgentGig. Connect Google or Microsoft 365 to get them in your inbox.");
+    return { delivered: true, summary: `Briefs saved as an ${draft.app} draft to yourself`, links: [{ label: "Open draft", url: draft.url }] };
   },
 });

@@ -40,7 +40,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ provider
   if (!code || !state) return back("/knowledge", { connectError: "The sign-in response was incomplete. Try connecting again." });
 
   try {
-    const { returnTo } = await finishConnect(parseProvider(provider) as OAuthProvider, code, state, url.origin, { realmId: url.searchParams.get("realmId") ?? undefined });
+    const { returnTo } = await finishConnect(parseProvider(provider) as OAuthProvider, code, state, url.origin, {
+      realmId: url.searchParams.get("realmId") ?? undefined,
+      accountsServer: url.searchParams.get("accounts-server") ?? undefined,
+    });
     return back(returnTo, { connected: provider });
   } catch (err) {
     if (!isGatewayError(err)) logError(err, { provider });

@@ -292,26 +292,47 @@ export function WinbackResult({ o }: { o: Out }) {
   );
 }
 
+interface Channel {
+  source: string;
+  currency: string;
+  gross: number;
+  refunds: number;
+  count: number;
+  disputes: number;
+  changePct: number | null;
+}
+
 export function RevenueResult({ o }: { o: Out }) {
-  const cur = o.currency;
-  const change = o.changePct as number | null;
-  const tiles: [string, string, string?][] = [
-    [`Last ${o.periodDays} days`, amount(o.grossThisPeriod, cur), change === null ? undefined : `${change > 0 ? "+" : ""}${change}% on the period before`],
-    ["Refunds", amount(o.refunds, cur)],
-    ["MRR", amount(o.mrr, cur), `${o.activeSubscriptions} active subscriptions`],
-    ["Needs chasing", `${(o.overdueInvoices as unknown[]).length + (o.failedPayments as unknown[]).length}`, "overdue invoices and failed payments"],
-  ];
+  // Results from before Square and PayPal were added held Stripe figures at the top level.
+  const channels: Channel[] =
+    (o.channels as Channel[] | undefined) ??
+    [{ source: "Stripe", currency: String(o.currency ?? ""), gross: Number(o.grossThisPeriod ?? 0), refunds: Number(o.refunds ?? 0), count: Number(o.chargeCount ?? 0), disputes: 0, changePct: (o.changePct as number | null) ?? null }];
+  const stripe = (o.stripe as { overdueInvoices: unknown[]; failedPayments: unknown[]; activeSubscriptions: number; mrr: number; currency: string } | null | undefined) ??
+    (Array.isArray(o.overdueInvoices) ? { overdueInvoices: o.overdueInvoices as unknown[], failedPayments: (o.failedPayments as unknown[]) ?? [], activeSubscriptions: Number(o.activeSubscriptions ?? 0), mrr: Number(o.mrr ?? 0), currency: String(o.currency) } : null);
   return (
     <div className="grid gap-3">
       <p className="text-sm font-medium">{String(o.headline ?? "")}</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {tiles.map(([label, value, hint]) => (
-          <div key={label} className="rounded-lg border bg-background p-3">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="font-display text-lg font-bold">{value}</p>
-            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+        {channels.map((c) => (
+          <div key={c.source} className="rounded-lg border bg-background p-3">
+            <p className="text-xs text-muted-foreground">{c.source}</p>
+            <p className="font-display text-lg font-bold">{amount(c.gross, c.currency)}</p>
+            <p className="text-xs text-muted-foreground">
+              {c.count} payments{c.changePct !== null && ` · ${c.changePct > 0 ? "+" : ""}${c.changePct}%`}
+              {c.refunds > 0 && ` · ${amount(c.refunds, c.currency)} refunded`}
+              {c.disputes > 0 && ` · ${c.disputes} open dispute${c.disputes > 1 ? "s" : ""}`}
+            </p>
           </div>
         ))}
+        {stripe && (
+          <div className="rounded-lg border bg-background p-3">
+            <p className="text-xs text-muted-foreground">Needs chasing</p>
+            <p className="font-display text-lg font-bold">{stripe.overdueInvoices.length + stripe.failedPayments.length}</p>
+            <p className="text-xs text-muted-foreground">
+              MRR {amount(stripe.mrr, stripe.currency)} · {stripe.activeSubscriptions} subscriptions
+            </p>
+          </div>
+        )}
       </div>
       <ul className="grid list-disc gap-1 pl-5 text-sm">
         {((o.observations as string[]) ?? []).map((x) => (
@@ -359,7 +380,7 @@ interface Bill {
 export function BookkeeperResult({ o }: { o: Out }) {
   const toBook = (o.toBook as Bill[]) ?? [];
   const held = (o.heldBack as Bill[]) ?? [];
-  const system = o.system === "xero" ? "Xero" : "QuickBooks";
+  const system = ({ xero: "Xero", quickbooks: "QuickBooks", freshbooks: "FreshBooks", sage: "Sage" } as Record<string, string>)[String(o.system)] ?? "your accounting software";
   const rows = [...toBook.map((b) => ({ ...b, held: false })), ...held.map((b) => ({ ...b, held: true }))];
   return (
     <div className="grid gap-3">
@@ -766,6 +787,76 @@ export function MeetingResult({ o }: { o: Out }) {
       )}
       {((o.openQuestions as string[]) ?? []).length > 0 && <p className="text-sm text-muted-foreground">Still open: {(o.openQuestions as string[]).join(" · ")}</p>}
       <EmailsResult emails={((o.followUps as { to: string; subject: string; body: string }[]) ?? []).map((f) => ({ label: f.to, subject: f.subject, body: f.body }))} empty="No follow-ups needed." />
+    </div>
+  );
+}
+
+const KIND_LABEL: Record<string, string> = { reminder: "Reminders", thank_you: "Thank-yous", missed: "Missed", cancelled: "Cancelled" };
+
+export function BookingAssistantResult({ o }: { o: Out }) {
+  const counts = (o.counts as Record<string, number>) ?? {};
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm text-muted-foreground">
+        From {((o.sources as string[]) ?? []).join(", ")}: {Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${KIND_LABEL[k].toLowerCase()}`).join(", ") || "nothing new"}.
+        {Number(o.alreadySent) > 0 && ` ${o.alreadySent} already handled.`}
+        {Number(o.noEmail) > 0 && ` ${o.noEmail} without a customer email.`}
+      </p>
+      <EmailsResult emails={(o.emails as Email[]) ?? []} empty="No booking emails needed today." />
+    </div>
+  );
+}
+
+export function DealNudgerResult({ o }: { o: Out }) {
+  const deals = (o.deals as { id: string; title: string; stage: string | null; value: number | null; currency: string | null; company: string | null; daysQuiet: number; url: string; nextStep: string | null; hasEmail: boolean }[]) ?? [];
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm text-muted-foreground">
+        {deals.length} of {String(o.totalOpen)} open deals in {String(o.system)} have gone quiet.
+      </p>
+      {deals.length > 0 && (
+        <ul className="grid gap-1.5">
+          {deals.map((d) => (
+            <li key={d.id} className="grid gap-0.5 rounded-lg border bg-background px-3 py-2 text-sm">
+              <p className="flex flex-wrap items-baseline justify-between gap-2">
+                <a href={d.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+                  {d.title}
+                </a>
+                <span className="text-xs text-muted-foreground">
+                  {d.stage ?? "No stage"} · {d.daysQuiet} days quiet{d.value ? ` · ${d.currency ? amount(d.value, d.currency) : d.value}` : ""}
+                </span>
+              </p>
+              {d.nextStep && <p className="text-muted-foreground">Next: {d.nextStep}</p>}
+              {!d.hasEmail && <p className="text-xs text-muted-foreground">No contact email in your CRM, so no draft.</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <EmailsResult emails={(o.emails as Email[]) ?? []} empty="No nudges needed." />
+    </div>
+  );
+}
+
+const CATEGORY_LABEL: Record<string, string> = { quote_request: "Quote request", question: "Question", booking: "Booking", complaint: "Complaint", job_application: "Job application", supplier_pitch: "Supplier pitch", spam: "Spam", other: "Other" };
+
+export function EnquiryResult({ o }: { o: Out }) {
+  const entries = (o.entries as { key: string; form: string; name: string | null; category: string; urgent: boolean; summary: string; hasEmail: boolean }[]) ?? [];
+  return (
+    <div className="grid gap-3">
+      {entries.length > 0 && (
+        <ul className="grid gap-1.5">
+          {entries.map((e) => (
+            <li key={e.key} className={cn("flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border bg-background px-3 py-2 text-sm", e.urgent && "border-destructive/40")}>
+              <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase", e.urgent ? "bg-destructive-soft text-destructive" : "bg-secondary text-muted-foreground")}>{CATEGORY_LABEL[e.category] ?? e.category}</span>
+              <span className="min-w-0 flex-1">{e.summary}</span>
+              <span className="text-xs text-muted-foreground">
+                {e.name ?? "Anonymous"} · {e.form}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <EmailsResult emails={(o.emails as Email[]) ?? []} empty="No new enquiries." />
     </div>
   );
 }

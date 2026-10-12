@@ -76,7 +76,7 @@ export function InventoryForm({ agent, busy, run }: FormProps) {
     >
       <RadioGroup value={from} onValueChange={(v) => setSource(v as "store" | "csv")} className="flex flex-wrap gap-4 text-sm">
         <label className="flex items-center gap-2">
-          <RadioGroupItem value="store" disabled={!store} /> {store ? `Live stock from ${store}` : "Live stock (connect Shopify or WooCommerce)"}
+          <RadioGroupItem value="store" disabled={!store} /> {store ? `Live stock from ${store}` : "Live stock (connect Shopify, WooCommerce or Square)"}
         </label>
         <label className="flex items-center gap-2">
           <RadioGroupItem value="csv" /> A CSV export
@@ -249,8 +249,9 @@ function Field({ id, label, type = "text", required = true, placeholder, default
 /** Name of the connected store platform, if any. */
 function useConnectedStore(): string | null {
   const conns = useConnections();
-  const c = conns.data.find((x) => (x.provider === "shopify" || x.provider === "woocommerce") && x.status === "active");
-  return c ? (c.provider === "shopify" ? "Shopify" : "WooCommerce") : null;
+  const names: Record<string, string> = { shopify: "Shopify", woocommerce: "WooCommerce", square: "Square" };
+  const c = conns.data.find((x) => x.provider in names && x.status === "active");
+  return c ? names[c.provider] : null;
 }
 
 function Choice({ id, label, value, onChange, options }: { id: string; label: string; value: string; onChange(v: string): void; options: [string, string][] }) {
@@ -814,6 +815,76 @@ export function MeetingForm({ agent, busy, run }: FormProps) {
       </div>
       <FilePick id="meeting-file" label="Or attach notes or a transcript (PDF or text)" accept="application/pdf,text/plain,text/markdown,.md,.txt" file={file} onFile={setFile} />
       <RunRow agent={agent} busy={busy} disabled={!file && notes.trim().length < 30} />
+    </form>
+  );
+}
+
+export function BookingAssistantForm({ agent, busy, run }: FormProps) {
+  const [mode, setMode] = useState("both");
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({ mode, ...(str(f, "ba-review") && { reviewUrl: str(f, "ba-review") }), ...(str(f, "ba-booking") && { bookingUrl: str(f, "ba-booking") }) });
+      }}
+    >
+      <Choice id="ba-mode" label="Send" value={mode} onChange={setMode} options={[["both", "Reminders and follow-ups"], ["reminders", "Reminders for tomorrow only"], ["follow-ups", "Follow-ups for yesterday only"]]} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="ba-review">Review link {optional}</Label>
+          <Input id="ba-review" name="ba-review" type="url" placeholder="Uses Company knowledge if empty" />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="ba-booking">Booking link {optional}</Label>
+          <Input id="ba-booking" name="ba-booking" type="url" placeholder="Where customers rebook; defaults to your website" />
+        </div>
+      </div>
+      <Note>Reads Square Appointments, Calendly and Acuity. Each booking gets each message once, however often this runs.</Note>
+      <RunRow agent={agent} busy={busy} />
+    </form>
+  );
+}
+
+export function DealNudgerForm({ agent, busy, run }: FormProps) {
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({ quietDays: Number(f.get("quietDays")), maxDeals: Number(f.get("maxDeals")) });
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="quietDays">No activity for at least (days)</Label>
+          <Input id="quietDays" name="quietDays" type="number" min={3} max={120} defaultValue={14} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="maxDeals">Most deals to nudge</Label>
+          <Input id="maxDeals" name="maxDeals" type="number" min={1} max={20} defaultValue={10} />
+        </div>
+      </div>
+      <RunRow agent={agent} busy={busy} />
+    </form>
+  );
+}
+
+export function EnquiryForm({ agent, busy, run }: FormProps) {
+  const [hours, setHours] = useState("24");
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run({ sinceHours: Number(hours) });
+      }}
+    >
+      <Choice id="sinceHours" label="New entries from" value={hours} onChange={setHours} options={[["24", "The last day"], ["72", "The last 3 days"], ["168", "The last week"]]} />
+      <Note>Reads Typeform and Jotform. Email addresses and phone numbers in answers are hidden from the AI, and each entry is handled once.</Note>
+      <RunRow agent={agent} busy={busy} />
     </form>
   );
 }

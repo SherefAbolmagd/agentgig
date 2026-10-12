@@ -32,9 +32,25 @@ const KEYS = [
   "QUICKBOOKS_CLIENT_ID",
   "QUICKBOOKS_CLIENT_SECRET",
   "COMPANIES_HOUSE_API_KEY",
+  "MICROSOFT_CLIENT_ID",
+  "MICROSOFT_CLIENT_SECRET",
+  "SQUARE_CLIENT_ID",
+  "SQUARE_CLIENT_SECRET",
+  "ZOHO_CLIENT_ID",
+  "ZOHO_CLIENT_SECRET",
+  "FRESHBOOKS_CLIENT_ID",
+  "FRESHBOOKS_CLIENT_SECRET",
+  "SAGE_CLIENT_ID",
+  "SAGE_CLIENT_SECRET",
 ] as const;
 
 const sm = new SecretManagerServiceClient();
+
+/** Plain (non-secret) settings passed to Cloud Run as env vars when set. */
+function envVars(names: string[]): string[] {
+  const set = names.filter((n) => process.env[n]?.trim()).map((n) => `${n}=${process.env[n]!.trim()}`);
+  return set.length ? ["--update-env-vars", set.join(",")] : [];
+}
 const secretId = (k: string) => `app-${k.toLowerCase().replace(/_/g, "-")}`;
 
 async function put(key: string, value: string) {
@@ -86,7 +102,7 @@ async function main() {
   const gcloud = process.platform === "win32" ? `${process.env.LOCALAPPDATA}\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.cmd` : "gcloud";
   const mapping = present.map((k) => `${k}=${secretId(k)}:latest`).join(",");
   console.log(`Attaching ${present.length} secret(s) to Cloud Run ${SERVICE}…`);
-  execFileSync(process.platform === "win32" ? `"${gcloud}"` : gcloud, ["run", "services", "update", SERVICE, "--region", REGION, "--project", PROJECT, "--update-secrets", mapping, ...(process.env.QUICKBOOKS_ENV ? ["--update-env-vars", `QUICKBOOKS_ENV=${process.env.QUICKBOOKS_ENV}`] : []), "--quiet"], {
+  execFileSync(process.platform === "win32" ? `"${gcloud}"` : gcloud, ["run", "services", "update", SERVICE, "--region", REGION, "--project", PROJECT, "--update-secrets", mapping, ...envVars(["QUICKBOOKS_ENV", "SQUARE_ENV"]), "--quiet"], {
     stdio: ["ignore", "ignore", "inherit"],
     shell: process.platform === "win32",
   });

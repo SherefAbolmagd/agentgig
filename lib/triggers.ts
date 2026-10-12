@@ -202,6 +202,11 @@ async function scheduledInput(agent: AgentDoc, user: UserDoc, hire: HireDoc): Pr
       return { sinceDays: new Date().getUTCDay() === 1 ? 3 : 1 };
     case "bills.book":
       return { period: "last-month" };
+    case "bookings.messages":
+    case "deals.nudge":
+      return {};
+    case "enquiries.triage":
+      return { sinceHours: new Date().getUTCDay() === 1 ? 72 : 24 };
     case "invoices.chase":
       return (await lastManualInput(hire.userId, agent.slug)) ?? {};
     case "reviews.request":

@@ -2,11 +2,14 @@
 import { AlertTriangle, CheckCircle2, ChevronDown, Info, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
+  BookingAssistantResult,
   BookingResult,
   BookkeeperResult,
   CashflowResult,
   DeadlineResult,
+  DealNudgerResult,
   DeliveryLinks,
+  EnquiryResult,
   HiringResult,
   InvoiceChaserResult,
   InventoryResult,
@@ -46,6 +49,9 @@ const NATIVE_VIEWS = new Set([
   "hiring-assistant",
   "deadline-keeper",
   "meeting-actions",
+  "booking-assistant",
+  "deal-nudger",
+  "enquiry-desk",
 ]);
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { money, STATUS, TONE_CLASSES } from "@/lib/client/format";
@@ -102,6 +108,9 @@ export function TaskResult({ task, businessName }: { task: Task | null; business
       {task.output && task.agentId === "hiring-assistant" && <HiringResult o={task.output} />}
       {task.output && task.agentId === "deadline-keeper" && <DeadlineResult o={task.output} />}
       {task.output && task.agentId === "meeting-actions" && <MeetingResult o={task.output} />}
+      {task.output && task.agentId === "booking-assistant" && <BookingAssistantResult o={task.output} />}
+      {task.output && task.agentId === "deal-nudger" && <DealNudgerResult o={task.output} />}
+      {task.output && task.agentId === "enquiry-desk" && <EnquiryResult o={task.output} />}
       <DeliveryLinks delivery={task.delivery} />
       {task.output && !NATIVE_VIEWS.has(task.agentId) && !Array.isArray(task.output.heldBack) && typeof task.output.summary === "string" && (
         <p className="rounded-lg border bg-background p-4 text-sm whitespace-pre-line">{task.output.summary}</p>

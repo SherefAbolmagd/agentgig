@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GatewayError } from "@/lib/errors";
-import { gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
 import { storeProducts } from "@/lib/connectors/store";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, groundingPrompt } from "./types";
@@ -191,10 +191,10 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
     if (!o.emails.length) return { delivered: true, summary: "Nothing to order" };
     const links: { label: string; url: string }[] = [];
     for (const e of o.emails) {
-      const draft = await gmailCreateDraft(userId, { to: e.to, subject: e.subject, body: e.body });
-      if (!draft) return notDelivered(`${o.emails.length} order email(s) ready. Connect Google to save them as Gmail drafts.`);
-      links.push({ label: `Gmail draft · ${e.supplier}`, url: draft.url });
+      const draft = await createEmailDraft(userId, { to: e.to, subject: e.subject, body: e.body });
+      if (!draft) return notDelivered(`${o.emails.length} order email(s) ready. Connect Google or Microsoft 365 to save them as email drafts.`);
+      links.push({ label: `${draft.app} draft · ${e.supplier}`, url: draft.url });
     }
-    return { delivered: true, summary: `${links.length} order email draft(s) saved in Gmail`, links };
+    return { delivered: true, summary: `${links.length} order email draft(s) saved`, links };
   },
 });

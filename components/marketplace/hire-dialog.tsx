@@ -13,7 +13,7 @@ import { ConnectionsPanel } from "@/components/connections-panel";
 import { PROVIDER_INFO, providerForTool, type Provider } from "@/lib/client/integrations";
 
 /** Tools some agents can't work without, because they read the owner's data from them. */
-const DATA_PROVIDERS: Provider[] = ["shopify", "woocommerce", "stripe", "hubspot", "mailchimp", "xero", "quickbooks"];
+const DATA_PROVIDERS: Provider[] = ["shopify", "woocommerce", "stripe", "square", "paypal", "hubspot", "pipedrive", "zoho", "mailchimp", "xero", "quickbooks", "freshbooks", "sage", "calendly", "acuity", "typeform", "jotform"];
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { api, ApiError } from "@/lib/client/api";
 import { useKnowledge, useMe, type WithId } from "@/lib/client/firestore";

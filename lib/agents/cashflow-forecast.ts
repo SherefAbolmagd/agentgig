@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { openItems } from "@/lib/connectors/accounting";
+import { ACCOUNTING_NAMES, openItems } from "@/lib/connectors/accounting";
+import { paypalSales } from "@/lib/connectors/paypal";
+import { squareSales } from "@/lib/connectors/square";
 import { stripeSnapshot } from "@/lib/connectors/stripe-data";
 import { GatewayError } from "@/lib/errors";
 import { generateJson, textPart } from "@/lib/vertex";
@@ -135,24 +137,37 @@ export const cashflowForecast = defineAgent<CashflowInput, CashflowOutput>({
   files: null,
 
   async run({ input, grounding, userId }) {
-    const [books, stripe] = await Promise.all([openItems(userId), stripeSnapshot(userId, 28).catch(() => null)]);
+    const quiet = <T>(p: Promise<T>) => p.catch(() => null);
+    const [books, stripe, square, paypal] = await Promise.all([openItems(userId), quiet(stripeSnapshot(userId, 28)), quiet(squareSales(userId, 28)), quiet(paypalSales(userId, 28))]);
     const { costs, skipped } = parseCosts(input.regularCosts);
-    if (!books && !stripe && !costs.length && input.weeklySales === undefined) {
-      throw new GatewayError("INVALID_INPUT", "Connect Xero, QuickBooks or Stripe, or enter your regular costs and weekly sales, so there's something to forecast.");
+    const channels = [
+      ...(stripe ? [{ source: "Stripe", currency: stripe.currency.toUpperCase(), net: stripe.grossThisPeriod - stripe.refunds }] : []),
+      ...[square, paypal].filter((c) => c !== null).map((c) => ({ source: c.source, currency: c.currency.toUpperCase(), net: c.gross - c.refunds })),
+    ];
+    if (!books && !channels.length && !costs.length && input.weeklySales === undefined) {
+      throw new GatewayError("INVALID_INPUT", "Connect your accounting tool, Stripe, Square or PayPal, or enter your regular costs and weekly sales, so there's something to forecast.");
     }
     const sources: string[] = [];
     const receipts: Dated[] = [];
     const payments: Dated[] = [];
     if (books) {
-      const sys = books.system === "xero" ? "Xero" : "QuickBooks";
+      const sys = ACCOUNTING_NAMES[books.system];
       receipts.push(...books.receivable.map((i) => ({ label: i.contact, amount: i.amountDue, date: i.dueDate })));
       payments.push(...books.payable.map((i) => ({ label: i.contact, amount: i.amountDue, date: i.dueDate })));
       sources.push(`${sys}: ${books.receivable.length} unpaid invoices, ${books.payable.length} unpaid bills`);
     }
     let weekly = input.weeklySales ?? 0;
-    if (stripe && input.weeklySales === undefined) {
-      weekly = Math.round(((stripe.grossThisPeriod - stripe.refunds) / 4) * 100) / 100;
-      sources.push(`Stripe: average ${weekly.toFixed(2)} a week over the last 4 weeks`);
+    if (input.weeklySales === undefined) {
+      // Average weekly takings over the last 4 weeks, only from channels in the forecast's currency.
+      for (const c of channels) {
+        if (c.currency !== input.currency) {
+          sources.push(`${c.source} left out: it's in ${c.currency}, not ${input.currency}`);
+          continue;
+        }
+        const perWeek = Math.round((c.net / 4) * 100) / 100;
+        weekly = Math.round((weekly + perWeek) * 100) / 100;
+        sources.push(`${c.source}: average ${perWeek.toFixed(2)} a week over the last 4 weeks`);
+      }
     }
     if (costs.length) sources.push(`${costs.length} regular costs you entered`);
     const weeks = forecastWeeks(thisMonday(), input.openingBalance, receipts, payments, costs, weekly);

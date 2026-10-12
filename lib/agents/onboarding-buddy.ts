@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { gmailCreateDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
@@ -8,7 +8,7 @@ export const OnboardingInput = z.object({
   role: z.string().trim().min(2).max(80),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   managerName: z.string().trim().min(2).max(80),
-  /** Used only to address the Gmail draft; never sent to the model. */
+  /** Used only to address the email draft; never sent to the model. */
   newHireEmail: z.email().optional(),
 });
 export type OnboardingInput = z.infer<typeof OnboardingInput>;
@@ -54,15 +54,15 @@ export const onboardingBuddy = defineAgent<OnboardingInput, OnboardingOutput>({
       preview: `“${o.welcomeEmail.subject}” · ${o.firstWeek.length} first-week tasks · ${o.documentsToCollect.length} documents to collect`,
       severity: "info",
       actions: [
-        { id: "approve", label: "Save welcome email to Gmail", kind: "approve" },
+        { id: "approve", label: "Save welcome email as a draft", kind: "approve" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
     };
   },
 
   async deliver(o, { userId }): Promise<Delivery> {
-    const draft = await gmailCreateDraft(userId, { to: o.newHireEmail, subject: o.welcomeEmail.subject, body: o.welcomeEmail.body });
-    if (!draft) return notDelivered("Welcome email ready. Connect Google to save it as a Gmail draft.");
-    return { delivered: true, summary: "Welcome email saved as a Gmail draft", links: [{ label: "Open draft", url: draft.url }] };
+    const draft = await createEmailDraft(userId, { to: o.newHireEmail, subject: o.welcomeEmail.subject, body: o.welcomeEmail.body });
+    if (!draft) return notDelivered("Welcome email ready. Connect Google or Microsoft 365 to save it as an email draft.");
+    return { delivered: true, summary: `Welcome email saved as an ${draft.app} draft`, links: [{ label: "Open draft", url: draft.url }] };
   },
 });

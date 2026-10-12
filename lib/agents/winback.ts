@@ -86,7 +86,7 @@ export const winback = defineAgent<WinbackInput, WinbackOutput>({
       preview: o.emails.length ? `To ${o.emails.map((e) => e.label).slice(0, 4).join(", ")}${o.emails.length > 4 ? "…" : ""}` : "Nobody matched.",
       severity: "info",
       actions: [
-        { id: "approve", label: "Save as Gmail drafts", kind: "approve" },
+        { id: "approve", label: "Save as email drafts", kind: "approve" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
     };

@@ -2,7 +2,12 @@ import { z } from "zod";
 import { getCallerId } from "@/lib/auth";
 import { GatewayError } from "@/lib/errors";
 import { saveKeyConnection, type KeyTester } from "@/lib/connectors/keys";
+import { testAcuity, testCalendly } from "@/lib/connectors/bookings";
+import { testPipedrive } from "@/lib/connectors/crm";
+import { testJotform, testTypeform } from "@/lib/connectors/forms";
 import { testHubspot } from "@/lib/connectors/hubspot";
+import { testPaypal } from "@/lib/connectors/paypal";
+import { testAsana, testNotion, testTrello } from "@/lib/connectors/tasks";
 import { testMailchimp } from "@/lib/connectors/mailchimp";
 import { parseProvider } from "@/lib/connectors/manage";
 import { testShopify } from "@/lib/connectors/shopify";
@@ -21,6 +26,15 @@ const TESTERS: Record<KeyProvider, KeyTester> = {
   stripe: testStripe,
   mailchimp: testMailchimp,
   hubspot: testHubspot,
+  paypal: testPaypal,
+  pipedrive: testPipedrive,
+  calendly: testCalendly,
+  acuity: testAcuity,
+  typeform: testTypeform,
+  jotform: testJotform,
+  trello: testTrello,
+  asana: testAsana,
+  notion: testNotion,
 };
 
 /**

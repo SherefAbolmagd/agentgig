@@ -21,15 +21,17 @@ export interface BillInput {
   note: string;
 }
 
+export type AccountingSystem = "xero" | "quickbooks" | "freshbooks" | "sage";
+export const ACCOUNTING_NAMES: Record<AccountingSystem, string> = { xero: "Xero", quickbooks: "QuickBooks", freshbooks: "FreshBooks", sage: "Sage" };
+
 export interface BillResult {
-  system: "xero" | "quickbooks";
+  system: AccountingSystem;
   id: string;
   url: string;
 }
 
-export async function connectedAccounting(userId: string): Promise<"xero" | "quickbooks" | null> {
-  if (await getConnection(userId, "xero")) return "xero";
-  if (await getConnection(userId, "quickbooks")) return "quickbooks";
+export async function connectedAccounting(userId: string): Promise<AccountingSystem | null> {
+  for (const p of ["xero", "quickbooks", "freshbooks", "sage"] as const) if (await getConnection(userId, p)) return p;
   return null;
 }
 
@@ -38,6 +40,10 @@ export async function createBill(userId: string, bill: BillInput): Promise<BillR
   if (xero) return xeroBill(xero, bill);
   const qbo = await getConnection(userId, "quickbooks");
   if (qbo) return quickbooksBill(qbo, bill);
+  const fb = await getConnection(userId, "freshbooks");
+  if (fb) return freshbooksBill(fb, bill);
+  const sg = await getConnection(userId, "sage");
+  if (sg) return sageBill(sg, bill);
   return null;
 }
 
@@ -125,7 +131,7 @@ export interface OpenItem {
 }
 
 export interface OpenItems {
-  system: "xero" | "quickbooks";
+  system: AccountingSystem;
   /** Customer invoices not yet fully paid. */
   receivable: OpenItem[];
   /** Supplier bills not yet fully paid. */
@@ -138,6 +144,10 @@ export async function openItems(userId: string): Promise<OpenItems | null> {
   if (xero) return xeroOpenItems(xero);
   const qbo = await getConnection(userId, "quickbooks");
   if (qbo) return quickbooksOpenItems(qbo);
+  const fb = await getConnection(userId, "freshbooks");
+  if (fb) return freshbooksOpenItems(fb);
+  const sg = await getConnection(userId, "sage");
+  if (sg) return sageOpenItems(sg);
   return null;
 }
 
@@ -225,4 +235,173 @@ async function quickbooksOpenItems(conn: Conn): Promise<OpenItems> {
   });
   const [invoices, bills] = await Promise.all([query("Invoice"), query("Bill")]);
   return { system: "quickbooks", receivable: invoices.map((t) => item(t, "invoice")), payable: bills.map((t) => item(t, "bill")) };
+}
+
+/* ------------------------------------------------------------------ */
+/* FreshBooks                                                          */
+/* ------------------------------------------------------------------ */
+
+async function freshbooks(conn: Conn) {
+  const token = await accessToken(conn);
+  const base = `https://api.freshbooks.com/accounting/account/${conn.meta?.accountId}`;
+  return <T>(path: string, init: RequestInit = {}) =>
+    vendorFetch<{ response: { result: T } }>("FreshBooks", `${base}${path}`, {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "api-version": "alpha", ...(init.headers ?? {}) },
+    }).then((r) => r.response.result);
+}
+
+interface FbMoney {
+  amount: string;
+  code: string;
+}
+
+async function freshbooksOpenItems(conn: Conn): Promise<OpenItems> {
+  const fb = await freshbooks(conn);
+  type Inv = { invoiceid: number; invoice_number: string; customerid: number; organization: string; fname: string; lname: string; create_date: string; due_date: string; amount: FbMoney; outstanding: FbMoney; payment_status: string; v3_status: string };
+  const invoices: Inv[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const r = await fb<{ invoices: Inv[]; pages: number }>(`/invoices/invoices?per_page=100&page=${page}`);
+    invoices.push(...r.invoices);
+    if (page >= r.pages) break;
+  }
+  const open = invoices.filter((i) => ["unpaid", "partial"].includes(i.payment_status) && i.v3_status !== "draft");
+  const ids = [...new Set(open.map((i) => i.customerid))];
+  const emails = new Map<number, string>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const q = ids.slice(i, i + 50).map((id) => `search[userids][]=${id}`).join("&");
+    const r = await fb<{ clients: { userid: number; email: string }[] }>(`/users/clients?${q}&per_page=50`);
+    for (const c of r.clients) if (c.email) emails.set(c.userid, c.email);
+  }
+  type Bill = { id: number; bill_number: string | null; vendor?: { vendor_name: string }; issue_date: string; due_date: string; amount: FbMoney; outstanding: FbMoney };
+  const bills = (await fb<{ bills: Bill[] }>("/bills/bills?per_page=100")).bills.filter((b) => Number(b.outstanding?.amount ?? 0) > 0);
+  return {
+    system: "freshbooks",
+    receivable: open.map((i) => ({
+      id: String(i.invoiceid),
+      number: i.invoice_number || null,
+      contact: i.organization || `${i.fname} ${i.lname}`.trim(),
+      email: emails.get(i.customerid) ?? null,
+      issueDate: day(i.create_date),
+      dueDate: day(i.due_date),
+      total: Number(i.amount.amount),
+      amountDue: Number(i.outstanding.amount),
+      currency: i.amount.code,
+      url: `https://my.freshbooks.com/#/invoice/${i.invoiceid}`,
+    })),
+    payable: bills.map((b) => ({
+      id: String(b.id),
+      number: b.bill_number,
+      contact: b.vendor?.vendor_name ?? "Supplier",
+      email: null,
+      issueDate: day(b.issue_date),
+      dueDate: day(b.due_date),
+      total: Number(b.amount.amount),
+      amountDue: Number(b.outstanding.amount),
+      currency: b.amount.code,
+      url: `https://my.freshbooks.com/#/bill/${b.id}`,
+    })),
+  };
+}
+
+async function freshbooksBill(conn: Conn, b: BillInput): Promise<BillResult> {
+  const fb = await freshbooks(conn);
+  const code = b.currency.toUpperCase();
+  const found = await fb<{ bill_vendors: { vendorid: number; vendor_name: string }[] }>(`/bill_vendors/bill_vendors?search[vendor_name]=${encodeURIComponent(b.supplier)}`);
+  const vendorid =
+    found.bill_vendors.find((v) => v.vendor_name.toLowerCase() === b.supplier.toLowerCase())?.vendorid ??
+    (await fb<{ bill_vendor: { vendorid: number } }>("/bill_vendors/bill_vendors", { method: "POST", body: JSON.stringify({ bill_vendor: { vendor_name: b.supplier, currency_code: code, language: "en" } }) })).bill_vendor.vendorid;
+  const cats = await fb<{ categories: { categoryid: number; category: string; parentid: number | null }[] }>("/expenses/categories?per_page=100");
+  const category = cats.categories.find((c) => /office|supplies|general/i.test(c.category)) ?? cats.categories.find((c) => c.parentid !== null) ?? cats.categories[0];
+  if (!category) throw new GatewayError("AGENT_FAILED", "FreshBooks has no expense category to put the bill against.");
+  const issue = b.issueDate ?? new Date().toISOString().slice(0, 10);
+  const offset = b.dueDate ? Math.max(0, Math.round((Date.parse(b.dueDate) - Date.parse(issue)) / 86_400_000)) : 30;
+  const res = await fb<{ bill: { id: number } }>("/bills/bills", {
+    method: "POST",
+    body: JSON.stringify({
+      bill: {
+        vendorid,
+        issue_date: issue,
+        due_offset_days: offset,
+        currency_code: code,
+        language: "en",
+        bill_number: b.invoiceNumber ?? undefined,
+        lines: b.lines.map((l) => ({ categoryid: category.categoryid, description: l.description.slice(0, 500), quantity: String(l.quantity), unit_cost: { amount: l.unitPrice.toFixed(2), code } })),
+      },
+    }),
+  });
+  return { system: "freshbooks", id: String(res.bill.id), url: `https://my.freshbooks.com/#/bill/${res.bill.id}` };
+}
+
+/* ------------------------------------------------------------------ */
+/* Sage Accounting                                                     */
+/* ------------------------------------------------------------------ */
+
+async function sage(conn: Conn) {
+  const token = await accessToken(conn);
+  return <T>(path: string, init: RequestInit = {}) =>
+    vendorFetch<T>("Sage", `https://api.accounting.sage.com/v3.1${path}`, {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, "x-business": String(conn.meta?.businessId), "content-type": "application/json", accept: "application/json", ...(init.headers ?? {}) },
+    });
+}
+
+type SageInvoice = { id: string; invoice_number?: string; vendor_reference?: string; contact: { id: string; displayed_as: string }; date: string; due_date: string; total_amount: string; outstanding_amount: string; currency?: { id: string } };
+
+async function sageOpenItems(conn: Conn): Promise<OpenItems> {
+  const call = await sage(conn);
+  const list = async (kind: "sales_invoices" | "purchase_invoices") => {
+    const out: SageInvoice[] = [];
+    for (const status of ["UNPAID", "PART_PAID"]) out.push(...(await call<{ $items: SageInvoice[] }>(`/${kind}?status_id=${status}&attributes=all&items_per_page=200`)).$items);
+    return out;
+  };
+  const [sales, purchases] = await Promise.all([list("sales_invoices"), list("purchase_invoices")]);
+  const emails = new Map<string, string>();
+  for (const id of [...new Set(sales.map((i) => i.contact.id))].slice(0, 50)) {
+    const c = await call<{ email?: string; main_contact_person?: { email?: string } }>(`/contacts/${id}`).catch(() => null);
+    const email = c?.main_contact_person?.email || c?.email;
+    if (email) emails.set(id, email);
+  }
+  const item = (i: SageInvoice, kind: "sales" | "purchase"): OpenItem => ({
+    id: i.id,
+    number: (kind === "sales" ? i.invoice_number : i.vendor_reference) ?? null,
+    contact: i.contact.displayed_as,
+    email: kind === "sales" ? (emails.get(i.contact.id) ?? null) : null,
+    issueDate: day(i.date),
+    dueDate: day(i.due_date),
+    total: Number(i.total_amount),
+    amountDue: Number(i.outstanding_amount),
+    currency: i.currency?.id ?? "GBP",
+    url: `https://accounting.sage.com/${kind === "sales" ? "invoicing/sales_invoices" : "purchases/purchase_invoices"}/${i.id}`,
+  });
+  return { system: "sage", receivable: sales.map((i) => item(i, "sales")), payable: purchases.map((i) => item(i, "purchase")) };
+}
+
+async function sageBill(conn: Conn, b: BillInput): Promise<BillResult> {
+  const call = await sage(conn);
+  const found = await call<{ $items: { id: string; displayed_as: string }[] }>(`/contacts?contact_type_id=VENDOR&search=${encodeURIComponent(b.supplier)}`);
+  const contactId =
+    found.$items.find((c) => c.displayed_as.toLowerCase().startsWith(b.supplier.toLowerCase()))?.id ??
+    (await call<{ id: string }>("/contacts", { method: "POST", body: JSON.stringify({ contact: { name: b.supplier, contact_type_ids: ["VENDOR"] } }) })).id;
+  const ledgers = await call<{ $items: { id: string; displayed_as: string }[] }>("/ledger_accounts?visible_in=purchasing&items_per_page=50");
+  const ledger = ledgers.$items.find((l) => /general purchases|cost of sales|purchases/i.test(l.displayed_as)) ?? ledgers.$items[0];
+  if (!ledger) throw new GatewayError("AGENT_FAILED", "Sage has no purchase ledger account to put the bill against.");
+  const net = b.lines.reduce((t, l) => t + l.quantity * l.unitPrice, 0);
+  const pct = b.taxAmount && net > 0 ? (b.taxAmount / net) * 100 : 0;
+  const rates = await call<{ $items: { id: string; percentage: string }[] }>("/tax_rates?attributes=percentage&items_per_page=50").catch(() => ({ $items: [] as { id: string; percentage: string }[] }));
+  const rate = rates.$items.reduce<{ id: string; percentage: string } | null>((best, r) => (!best || Math.abs(Number(r.percentage) - pct) < Math.abs(Number(best.percentage) - pct) ? r : best), null);
+  const res = await call<{ id: string }>("/purchase_invoices", {
+    method: "POST",
+    body: JSON.stringify({
+      purchase_invoice: {
+        contact_id: contactId,
+        date: b.issueDate ?? new Date().toISOString().slice(0, 10),
+        ...(b.dueDate && { due_date: b.dueDate }),
+        vendor_reference: b.invoiceNumber ?? undefined,
+        notes: b.note.slice(0, 2000),
+        invoice_lines: b.lines.map((l) => ({ description: l.description.slice(0, 200), ledger_account_id: ledger.id, quantity: l.quantity, unit_price: l.unitPrice, ...(rate && { tax_rate_id: rate.id }) })),
+      },
+    }),
+  });
+  return { system: "sage", id: res.id, url: `https://accounting.sage.com/purchases/purchase_invoices/${res.id}` };
 }

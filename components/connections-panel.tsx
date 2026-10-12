@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api, ApiError } from "@/lib/client/api";
 import { useConnections } from "@/lib/client/firestore";
 import { PROVIDER_INFO, PROVIDERS, useIntegrationStatus, type Provider } from "@/lib/client/integrations";
+import { INTEGRATION_GROUPS } from "@/lib/integrations";
 import { cn } from "@/lib/utils";
 
 /** Starts a sign-in connection: navigates to the vendor's consent screen (or the WooCommerce store's approval page). */
@@ -18,7 +19,7 @@ export async function connectProvider(provider: Provider, returnTo: string, site
   window.location.assign(res.url);
 }
 
-const GROUPS = ["Workspace", "Store", "Payments", "Marketing & sales", "Accounting"] as const;
+const GROUPS = INTEGRATION_GROUPS;
 
 export function ConnectionsPanel({ providers = [...PROVIDERS], returnTo, compact }: { providers?: Provider[]; returnTo: string; compact?: boolean }) {
   const conns = useConnections();

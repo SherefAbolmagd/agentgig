@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { notDelivered, type Delivery } from "@/lib/connectors";
-import { connectedAccounting, createBill } from "@/lib/connectors/accounting";
+import { ACCOUNTING_NAMES, connectedAccounting, createBill, type AccountingSystem } from "@/lib/connectors/accounting";
 import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS, type TaskDoc } from "@/types/firestore";
@@ -46,7 +46,7 @@ export const bookkeeper = defineAgent<BookkeeperInput, BookkeeperOutput>({
 
   async run({ input, userId }) {
     const system = await connectedAccounting(userId);
-    if (!system) throw new GatewayError("INVALID_INPUT", "Connect Xero or QuickBooks so Bookkeeper can create bills.");
+    if (!system) throw new GatewayError("INVALID_INPUT", "Connect Xero, QuickBooks, FreshBooks or Sage so Bookkeeper can create bills.");
     const [start, end] = range(input.period);
     const tasks = (await db().collection(COLLECTIONS.tasks).where("userId", "==", userId).where("agentId", "==", "receipthero").get()).docs
       .map((d) => ({ id: d.id, ...(d.data() as TaskDoc) }))
@@ -87,11 +87,11 @@ export const bookkeeper = defineAgent<BookkeeperInput, BookkeeperOutput>({
 
   approval(o) {
     return {
-      title: o.toBook.length ? `${o.toBook.length} bill${o.toBook.length > 1 ? "s" : ""} ready for ${o.system === "xero" ? "Xero" : "QuickBooks"}` : "Nothing new to book",
+      title: o.toBook.length ? `${o.toBook.length} bill${o.toBook.length > 1 ? "s" : ""} ready for ${systemName(o.system)}` : "Nothing new to book",
       preview: o.heldBack.length ? `${o.heldBack.length} held back: ${o.heldBack[0].problem}` : o.toBook.map((b) => b.supplier).join(", "),
       severity: o.heldBack.length ? "check" : "info",
       actions: [
-        { id: "approve", label: o.system === "xero" ? "Create draft bills in Xero" : "Create bills in QuickBooks", kind: "approve" },
+        { id: "approve", label: o.system === "xero" ? "Create draft bills in Xero" : `Create bills in ${systemName(o.system)}`, kind: "approve" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
     };
@@ -112,7 +112,7 @@ export const bookkeeper = defineAgent<BookkeeperInput, BookkeeperOutput>({
         const bill = await createBill(userId, { ...inv, note: `Added by AgentGig from ReceiptHero task ${inv.taskId}` });
         if (!bill) {
           await ref.delete();
-          return notDelivered("Bills ready. Connect Xero or QuickBooks to create them.");
+          return notDelivered("Bills ready. Connect your accounting software to create them.");
         }
         await ref.update({ system: bill.system, billId: bill.id });
         links.push({ label: `${inv.supplier} ${inv.invoiceNumber ?? ""}`.trim(), url: bill.url });
@@ -121,9 +121,13 @@ export const bookkeeper = defineAgent<BookkeeperInput, BookkeeperOutput>({
         throw err;
       }
     }
-    return { delivered: true, summary: `${links.length} bill${links.length === 1 ? "" : "s"} created${o.system === "xero" ? " as drafts in Xero" : " in QuickBooks"}`, links };
+    return { delivered: true, summary: `${links.length} bill${links.length === 1 ? "" : "s"} created${o.system === "xero" ? " as drafts in Xero" : ` in ${systemName(o.system)}`}`, links };
   },
 });
+
+function systemName(system: string | null): string {
+  return system && system in ACCOUNTING_NAMES ? ACCOUNTING_NAMES[system as AccountingSystem] : "your accounting software";
+}
 
 function bookId(userId: string, key: string) {
   return `${userId}_${key}`.replace(/[^A-Za-z0-9_#-]/g, "-").slice(0, 400);

@@ -55,13 +55,16 @@ export function inWindow(iso: string, fromDays: number, toDays: number, now = Da
   return age >= fromDays && age <= toDays;
 }
 
-export type StoreSource = "shopify" | "woocommerce";
+export type StoreSource = "shopify" | "woocommerce" | "square";
 
 export async function storeProducts(userId: string): Promise<{ source: StoreSource; products: StoreProduct[] } | null> {
   const s = await shopifyProducts(userId);
   if (s) return { source: "shopify", products: s };
   const w = await wooProducts(userId);
-  return w ? { source: "woocommerce", products: w } : null;
+  if (w) return { source: "woocommerce", products: w };
+  const { squareProducts } = await import("./square");
+  const q = await squareProducts(userId);
+  return q ? { source: "square", products: q } : null;
 }
 
 export async function storeFindOrders(userId: string, q: { orderNumber?: string; email?: string }): Promise<{ source: StoreSource; orders: StoreOrder[] } | null> {

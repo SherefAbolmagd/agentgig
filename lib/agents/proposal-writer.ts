@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { notDelivered, type Delivery } from "@/lib/connectors";
+import { createEmailDraft, notDelivered, selfAddress, type Delivery } from "@/lib/connectors";
 import { docsCreate } from "@/lib/connectors/google";
 import { GatewayError } from "@/lib/errors";
 import { filePart, generateJson, textPart } from "@/lib/vertex";
@@ -98,7 +98,13 @@ export const proposalWriter = defineAgent<ProposalInput, ProposalOutput>({
 
   async deliver(o, { userId }): Promise<Delivery> {
     const doc = await docsCreate(userId, `${o.title}${o.buyer ? ` — ${o.buyer}` : ""}`, proposalHtml(o));
-    if (!doc) return notDelivered("Proposal ready. Connect Google to get it as an editable Google Doc.");
+    if (!doc) {
+      // Outlook users get the text as a draft to themselves instead of a Google Doc.
+      const text = [o.title, ...o.sections.map((s) => `\n${s.heading}\n\n${s.body}`), "\nRequirements checklist (delete before sending):", ...o.requirements.map((r) => `[${r.status.toUpperCase()}] ${r.requirement}`)].join("\n");
+      const draft = await createEmailDraft(userId, { to: await selfAddress(userId), subject: `Proposal draft: ${o.title}`, body: text });
+      if (draft) return { delivered: true, summary: `Proposal saved as an ${draft.app} draft to yourself`, links: [{ label: "Open draft", url: draft.url }] };
+      return notDelivered("Proposal ready. Connect Google to get it as a Google Doc, or Microsoft 365 to get it by email.");
+    }
     return { delivered: true, summary: "Saved as a Google Doc in your Drive, with the checklist at the end.", links: [{ label: "Open the doc", url: doc.url }] };
   },
 });
