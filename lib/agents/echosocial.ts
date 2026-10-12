@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { generateJson, textPart } from "@/lib/vertex";
+import { getConnection, linkedinPost, simulated, type Delivery } from "@/lib/connectors";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
 const TONES = ["Friendly", "Confident", "Expert", "Playful"] as const;
@@ -49,6 +50,7 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
   tier: "flash",
   inputSchema: EchoSocialInput,
   scrubFields: ["audience", "topic"],
+  editableField: "text",
   files: null,
 
   async run({ input, grounding }) {
@@ -99,9 +101,21 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
     };
   },
 
-  // LinkedIn's posting API needs partner approval, so publishing is simulated.
-  async deliver(output) {
-    return { channel: "linkedin", status: "scheduled", publishAt: output.scheduledFor, simulated: true };
+  // LinkedIn's API can't schedule, so a future post becomes a Cloud Task that publishes at that time.
+  async deliver(output, { userId, taskId }): Promise<Delivery> {
+    if (!(await getConnection(userId, "linkedin"))) {
+      return simulated("Post approved. Connect LinkedIn so EchoSocial can publish it for you.");
+    }
+    const at = new Date(output.scheduledFor);
+    if (at.getTime() > Date.now() + 2 * 60_000) {
+      // Imported lazily: triggers → pipeline → agents would be a circular import at load time.
+      const { schedulePublish } = await import("@/lib/triggers");
+      await schedulePublish(taskId, userId, at);
+      const when = at.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: output.timeZone });
+      return { simulated: false, summary: `Scheduled to post on LinkedIn ${when}`, scheduledFor: output.scheduledFor };
+    }
+    const post = await linkedinPost(userId, output.text);
+    return { simulated: false, summary: "Posted on LinkedIn", links: post ? [{ label: "View post", url: post.url }] : [] };
   },
 });
 

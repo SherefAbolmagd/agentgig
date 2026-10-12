@@ -7,6 +7,8 @@ import { env } from "./env";
 import { log as writeLog } from "./log";
 import { db } from "./firebase-admin";
 import { runTask } from "./gateway/pipeline";
+import { driveDownload, driveListInvoices } from "./connectors/google";
+import { linkedinPost } from "./connectors/linkedin";
 import { isGatewayError } from "./errors";
 import { COLLECTIONS, type AgentDoc, type HireDoc, type TaskDoc, type UserDoc } from "@/types/firestore";
 
@@ -26,6 +28,10 @@ export interface Job {
   origin: Extract<TaskDoc["origin"], "schedule" | "event">;
   /** gs:// object handed to the agent as its file (invoice inbox). */
   gcsFile?: { bucket: string; name: string; contentType: string };
+  /** Google Drive file handed to the agent (Drive invoice folder). */
+  driveFile?: { id: string; name: string; mimeType: string };
+  /** Deliver an already-approved task at its scheduled time (LinkedIn posts). */
+  publishTaskId?: string;
 }
 
 let tasksClient: CloudTasksClient | undefined;
@@ -33,7 +39,7 @@ let storage: Storage | undefined;
 const gcs = () => (storage ??= new Storage({ projectId: env().GOOGLE_CLOUD_PROJECT }));
 
 /** Queues a job on Cloud Tasks, or runs it inline in local dev. */
-export async function enqueue(job: Job): Promise<"queued" | "duplicate" | "ran-inline"> {
+export async function enqueue(job: Job, runAt?: Date): Promise<"queued" | "duplicate" | "ran-inline"> {
   const { APP_URL, GOOGLE_CLOUD_PROJECT, TASKS_LOCATION, TASKS_QUEUE, TASKS_SERVICE_ACCOUNT } = env();
   if (!APP_URL || !TASKS_SERVICE_ACCOUNT) {
     void runJob(job).catch((err) => console.error("inline job failed", err));
@@ -46,6 +52,7 @@ export async function enqueue(job: Job): Promise<"queued" | "duplicate" | "ran-i
       parent,
       task: {
         name: `${parent}/tasks/${job.key}`,
+        ...(runAt && { scheduleTime: { seconds: Math.floor(runAt.getTime() / 1000) } }),
         httpRequest: {
           httpMethod: "POST",
           url: `${APP_URL}/api/tasks/run`,
@@ -68,8 +75,17 @@ export async function enqueue(job: Job): Promise<"queued" | "duplicate" | "ran-i
  * task; only infrastructure errors are rethrown so Cloud Tasks retries.
  */
 export async function runJob(job: Job): Promise<{ status: string }> {
-  log("job.start", { key: job.key, agentId: job.agentId, origin: job.origin, file: job.gcsFile?.name });
+  log("job.start", { key: job.key, agentId: job.agentId, origin: job.origin, file: job.gcsFile?.name ?? job.driveFile?.name });
+  if (job.publishTaskId) return publishTask(job.publishTaskId, job.userId);
   let files: { name: string; mimeType: string; data: Buffer }[] = [];
+  if (job.driveFile) {
+    const data = await driveDownload(job.userId, job.driveFile.id);
+    if (!data) {
+      log("job.file_missing", { key: job.key, driveFile: job.driveFile.id }, "WARNING");
+      return { status: "not run: Drive file no longer available" };
+    }
+    files = [{ name: job.driveFile.name, mimeType: job.driveFile.mimeType, data }];
+  }
   if (job.gcsFile) {
     try {
       files = [await downloadJobFile(job.gcsFile)];
@@ -214,4 +230,71 @@ export async function onInboxObject(bucket: string, name: string, contentType: s
 
 export function isInboxType(mime: string) {
   return INBOX_TYPES.has(mime);
+}
+
+/* ------------------------------------------------------------------ */
+/* Scheduled publishing                                                */
+/* ------------------------------------------------------------------ */
+
+/** Queues an approved task's delivery for a future time. */
+export async function schedulePublish(taskId: string, userId: string, at: Date) {
+  return enqueue({ key: `publish-${taskId}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100), userId, agentId: "echosocial", input: {}, origin: "schedule", publishTaskId: taskId }, at);
+}
+
+async function publishTask(taskId: string, userId: string): Promise<{ status: string }> {
+  const ref = db().collection(COLLECTIONS.tasks).doc(taskId);
+  const task = (await ref.get()).data() as (TaskDoc & { delivery?: { published?: boolean } }) | undefined;
+  if (!task || task.userId !== userId || task.status !== "delivered") return { status: "not run: task not approved" };
+  if (task.delivery?.published) return { status: "already published" };
+  const post = await linkedinPost(userId, String(task.output?.text ?? ""));
+  if (!post) return { status: "not run: LinkedIn not connected" };
+  await ref.update({
+    "delivery.published": true,
+    "delivery.summary": "Posted on LinkedIn",
+    "delivery.links": [{ label: "View post", url: post.url }],
+    steps: FieldValue.arrayUnion({ step: "deliver", status: "ok", message: "Posted on LinkedIn at the scheduled time", at: Timestamp.now() }),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  log("job.published", { taskId });
+  return { status: "published" };
+}
+
+/* ------------------------------------------------------------------ */
+/* Google Drive invoice folder                                         */
+/* ------------------------------------------------------------------ */
+
+/** For every owner whose ReceiptHero watches Drive, queues files that appeared since it was hired. */
+export async function queueDriveInvoices() {
+  const hires = await db().collection(COLLECTIONS.hires).where("active", "==", true).where("trigger.event", "==", "google_drive.file_created").get();
+  let queued = 0;
+  for (const doc of hires.docs) {
+    const hire = doc.data() as HireDoc;
+    const listing = await driveListInvoices(hire.userId).catch((err) => {
+      log("drive.list_failed", { hire: doc.id, error: err instanceof Error ? err.message : String(err) }, "WARNING");
+      return null;
+    });
+    if (!listing) continue;
+    const since = (hire.updatedAt ?? hire.createdAt).toMillis();
+    for (const f of listing.files) {
+      if (Date.parse(f.createdTime) < since) continue;
+      // Claim the file once, atomically, so overlapping cron ticks can't double-process it.
+      const claim = db().collection("drive_seen").doc(`${hire.userId}_${f.id}`);
+      try {
+        await claim.create({ userId: hire.userId, fileId: f.id, createdAt: FieldValue.serverTimestamp() });
+      } catch {
+        continue;
+      }
+      await enqueue({
+        key: `drive-${hire.userId}-${f.id}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100),
+        userId: hire.userId,
+        agentId: "receipthero",
+        input: { note: `Found in Google Drive: ${f.name}` },
+        origin: "event",
+        driveFile: { id: f.id, name: f.name, mimeType: f.mimeType },
+      });
+      queued++;
+    }
+  }
+  if (queued) log("drive.queued", { queued });
+  return { watched: hires.size, queued };
 }

@@ -5,7 +5,7 @@ import { audit, type Extracted } from "@/lib/agents/receipthero";
 // The Lumen Supplies invoice from the prototype: items + 20% VAT = £124.92, printed total £126.92.
 const lumen: Extracted = {
   isInvoiceOrReceipt: true,
-  vendor: { name: "Lumen Supplies Ltd", address: null, taxId: "GB 293 8841 07" },
+  vendor: { name: "Lumen Supplies Ltd", address: null, taxId: "GB 293 8841 07", email: null },
   invoiceNumber: "INV-20931",
   issueDate: "2026-10-08",
   currency: "GBP",

@@ -69,7 +69,7 @@ export function partnerAgent(agent: AgentDoc, rawInput?: unknown): AnyNativeAgen
 
     // Partner results are shown in AgentExchange; nothing is posted on the owner's behalf yet.
     async deliver() {
-      return { deliveredTo: "AgentExchange", simulated: false };
+      return { simulated: false, summary: "Result saved in AgentExchange" };
     },
   };
 }

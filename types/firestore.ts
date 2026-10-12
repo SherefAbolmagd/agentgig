@@ -126,12 +126,14 @@ export interface HireDoc {
 
 export interface ConnectionDoc {
   userId: string;
-  provider: ToolProvider;
+  provider: ToolProvider | "google";
   accountLabel: string; // e.g. "Café Lumen company page"
   scopes: string[];
   /** Secret Manager resource name holding the refresh token. Never the token itself. */
   secretRef: string;
   status: "active" | "expired" | "revoked";
+  /** Provider-specific details, e.g. LinkedIn person URN, Slack default channel, Drive folder ID. */
+  meta?: Record<string, unknown>;
   expiresAt?: Ts;
   createdAt: Ts;
 }
@@ -215,6 +217,8 @@ export interface ApprovalDoc {
   preview: string;
   severity: "info" | "check";
   actions: ApprovalAction[];
+  /** Output field the owner may edit before approving, if any. */
+  editField?: string | null;
   status: "open" | "approved" | "skipped";
   editedOutput?: Record<string, unknown>;
   createdAt: Ts;

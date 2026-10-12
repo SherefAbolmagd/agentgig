@@ -14,6 +14,8 @@ const Job = z.object({
   input: z.record(z.string(), z.unknown()),
   origin: z.enum(["schedule", "event"]),
   gcsFile: z.object({ bucket: z.string(), name: z.string(), contentType: z.string() }).optional(),
+  driveFile: z.object({ id: z.string(), name: z.string(), mimeType: z.string() }).optional(),
+  publishTaskId: z.string().optional(),
 });
 
 /**

@@ -130,7 +130,7 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
     const draft = handler.approval(output);
     const approvalRef = await db()
       .collection(COLLECTIONS.approvals)
-      .add({ ...draft, userId: req.userId, taskId, agentId: agent.slug, status: "open", createdAt: FieldValue.serverTimestamp() });
+      .add({ ...draft, editField: handler.editableField ?? null, userId: req.userId, taskId, agentId: agent.slug, status: "open", createdAt: FieldValue.serverTimestamp() });
     await taskRef.update({ status: "awaiting_approval", output, finishedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     await log("deliver", "ok", `Charged ${agent.tokensPerTask} tokens · draft sent to your approval inbox`);
     return { taskId, status: "awaiting_approval", output, dlpFindings, tokensCharged: agent.tokensPerTask, balance, approvalId: approvalRef.id };
@@ -138,7 +138,7 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
 
   const delivery = await handler.deliver(output, { userId: req.userId, taskId });
   await taskRef.update({ status: "delivered", output, delivery, finishedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  await log("deliver", "ok", `Charged ${agent.tokensPerTask} tokens · delivered${delivery.simulated ? " (simulated)" : ""}`);
+  await log("deliver", "ok", `Charged ${agent.tokensPerTask} tokens · ${delivery.summary}`);
   return { taskId, status: "delivered", output, dlpFindings, tokensCharged: agent.tokensPerTask, balance, delivery };
 }
 

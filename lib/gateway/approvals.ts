@@ -9,8 +9,10 @@ import { COLLECTIONS, type AgentDoc, type ApprovalDoc, type TaskDoc } from "@/ty
 
 export const ApprovalDecision = z.object({
   action: z.enum(["approve", "skip"]),
-  /** Owner's edited post text (EchoSocial). Saved as a style example. */
+  /** Owner's edited text for the agent's editable field. Saved as a style example. */
   editedText: z.string().trim().min(1).max(3000).optional(),
+  /** Publish now instead of at the suggested time (EchoSocial). */
+  postNow: z.boolean().optional(),
 });
 export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
 
@@ -50,10 +52,20 @@ export async function resolveApproval(userId: string, approvalId: string, decisi
     return { status: "discarded" as const };
   }
 
+  const agentDoc = (await store.collection(COLLECTIONS.agents).doc(task.agentId).get()).data() as AgentDoc | undefined;
+  const handler = NATIVE_AGENTS[task.agentId] ?? (agentDoc?.endpointUrl ? partnerAgent(agentDoc) : undefined);
+  if (!handler) throw new GatewayError("AGENT_UNAVAILABLE", "This agent can't deliver results yet.");
+
   let output = task.output ?? {};
-  const original = typeof output.text === "string" ? output.text : null;
-  if (decision.editedText && original !== null && decision.editedText !== original) {
-    output = { ...output, text: decision.editedText, characterCount: decision.editedText.length, editedByOwner: true };
+  const field = handler.editableField;
+  const original = field && typeof output[field] === "string" ? (output[field] as string) : null;
+  if (field && decision.editedText && original !== null && decision.editedText !== original) {
+    output = {
+      ...output,
+      [field]: decision.editedText,
+      ...(field === "text" && { characterCount: decision.editedText.length }),
+      editedByOwner: true,
+    };
     await store.collection(COLLECTIONS.styleExamples).add({
       userId,
       agentId: task.agentId,
@@ -63,12 +75,10 @@ export async function resolveApproval(userId: string, approvalId: string, decisi
     });
     await approvalRef.update({ editedOutput: output });
   }
+  if (decision.postNow && typeof output.scheduledFor === "string") output = { ...output, scheduledFor: new Date().toISOString() };
 
-  const agentDoc = (await store.collection(COLLECTIONS.agents).doc(task.agentId).get()).data() as AgentDoc | undefined;
-  const handler = NATIVE_AGENTS[task.agentId] ?? (agentDoc?.endpointUrl ? partnerAgent(agentDoc) : undefined);
-  if (!handler) throw new GatewayError("AGENT_UNAVAILABLE", "This agent can't deliver results yet.");
   const delivery = await handler.deliver(output, { userId, taskId: approval.taskId });
   await taskRef.update({ status: "delivered", output, delivery, updatedAt: FieldValue.serverTimestamp() });
-  await log(`You approved${output.editedByOwner ? " your edited version" : ""} · delivered${delivery.simulated ? " (simulated)" : ""}`);
+  await log(`You approved${output.editedByOwner ? " your edited version" : ""} · ${delivery.summary}`);
   return { status: "delivered" as const, delivery };
 }

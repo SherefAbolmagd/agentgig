@@ -1,6 +1,7 @@
 import type { Part } from "@google/genai";
 import type { z } from "zod";
 import { filePart, textPart, type GenerateJsonResult, type ModelTier } from "@/lib/vertex";
+import type { Delivery } from "@/lib/connectors";
 import type { ApprovalAction, ApprovalDoc, BusinessProfile } from "@/types/firestore";
 
 export interface UploadedFile {
@@ -59,7 +60,9 @@ export interface NativeAgent<I extends Record<string, unknown>, O extends Record
   run(ctx: AgentRunContext<I>): Promise<AgentRunResult<O>>;
   approval(output: O): ApprovalDraft;
   /** Performs the real-world action. Simulated for the hackathon. */
-  deliver(output: O, ctx: { userId: string; taskId: string }): Promise<Record<string, unknown>>;
+  deliver(output: O, ctx: { userId: string; taskId: string }): Promise<Delivery>;
+  /** Output field the owner can edit before approving (e.g. the post text). */
+  editableField?: keyof O & string;
 }
 
 export type AnyNativeAgent = NativeAgent<Record<string, unknown>, Record<string, unknown>>;

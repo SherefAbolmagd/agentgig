@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase-admin";
 import { GatewayError } from "@/lib/errors";
 import { filePart, generateJson, textPart } from "@/lib/vertex";
 import { COLLECTIONS } from "@/types/firestore";
+import { gmailCreateDraft, sheetsAppendRow, simulated, type Delivery } from "@/lib/connectors";
 import { defineAgent, groundingPrompt } from "./types";
 
 export const ReceiptHeroInput = z.object({
@@ -19,6 +20,7 @@ const Extracted = z.object({
     name: z.string(),
     address: z.string().nullable(),
     taxId: z.string().nullable().describe("VAT / GST / tax registration number exactly as printed"),
+    email: z.string().nullable().describe("Supplier's email address if printed"),
   }),
   invoiceNumber: z.string().nullable(),
   issueDate: z.string().nullable().describe("YYYY-MM-DD"),
@@ -151,13 +153,36 @@ export const receiptHero = defineAgent<ReceiptHeroInput, ReceiptHeroOutput>({
     };
   },
 
-  // Filing to Drive and emailing suppliers are simulated for the hackathon.
-  async deliver(o) {
-    return {
-      filedTo: o.verdict === "ok" ? "Drive /Invoices/Checked" : "Drive /Invoices/Needs attention",
-      supplierEmailDrafted: o.verdict === "check",
-      simulated: true,
-    };
+  async deliver(o, { userId }): Promise<Delivery> {
+    const sheet = await sheetsAppendRow(userId, [
+      o.issueDate ?? "",
+      o.vendor.name,
+      o.invoiceNumber ?? "",
+      o.subtotal ?? o.lineItemsTotal,
+      o.taxAmount ?? 0,
+      o.totalPrinted,
+      o.currency,
+      o.verdict === "ok" ? "OK" : (o.flags.find((f) => f.severity !== "low")?.message ?? "Check"),
+      new Date().toISOString().slice(0, 10),
+    ]);
+    if (!sheet) return simulated("Audited. Connect Google to log invoices to your spend sheet and draft supplier emails.");
+    const links = [{ label: "Spend log", url: sheet.url }];
+    const problem = o.flags.find((f) => f.severity === "high");
+    if (problem) {
+      const draft = await gmailCreateDraft(userId, {
+        to: o.vendor.email,
+        subject: `Invoice ${o.invoiceNumber ?? ""} needs correcting`.replace("  ", " "),
+        body: `Hello ${o.vendor.name},
+
+We've received invoice ${o.invoiceNumber ?? "(no number)"}. ${problem.message}
+
+Could you send a corrected invoice? We'll pay as soon as it arrives.
+
+Thank you`,
+      });
+      if (draft) links.push({ label: "Correction email draft", url: draft.url });
+    }
+    return { simulated: false, summary: problem ? "Logged to your spend sheet and drafted a correction email" : "Logged to your spend sheet", links };
   },
 });
 
