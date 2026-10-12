@@ -16,6 +16,7 @@ import {
   COLLECTIONS,
   type AgentDoc,
   type ApprovalDoc,
+  type ConnectionDoc,
   type HireDoc,
   type KnowledgeSourceDoc,
   type TaskDoc,
@@ -129,4 +130,9 @@ export function useKnowledge() {
     [where("userId", "==", uid), orderBy("createdAt", "desc")],
     `knowledge:${uid}`,
   );
+}
+
+export function useConnections() {
+  const uid = useUid();
+  return useLiveQuery<ConnectionDoc>(uid && COLLECTIONS.connections, [where("userId", "==", uid)], `connections:${uid}`);
 }

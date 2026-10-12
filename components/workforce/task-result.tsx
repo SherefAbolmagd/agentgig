@@ -1,6 +1,9 @@
 "use client";
 import { AlertTriangle, CheckCircle2, ChevronDown, Info, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { DeliveryLinks, InventoryResult, OnboardingResult, ReplyResult, RotaResult } from "./agent-results";
+
+const NATIVE_VIEWS = new Set(["echosocial", "receipthero", "dm-concierge", "reviewpulse", "inventory-guardian", "rotabuilder", "onboarding-buddy"]);
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { money, STATUS, TONE_CLASSES } from "@/lib/client/format";
 import type { WithId } from "@/lib/client/firestore";
@@ -36,7 +39,13 @@ export function TaskResult({ task, businessName }: { task: Task | null; business
       {task.output && task.agentId === "echosocial" && <LinkedInPreview task={task} businessName={businessName} />}
       {task.output && task.agentId === "receipthero" && <InvoiceAudit output={task.output as unknown as Invoice} />}
       {task.output && Array.isArray(task.output.heldBack) && <VatSummary output={task.output as unknown as Vat} />}
-      {task.output && !["echosocial", "receipthero"].includes(task.agentId) && !Array.isArray(task.output.heldBack) && typeof task.output.summary === "string" && (
+      {task.output && task.agentId === "dm-concierge" && <ReplyResult o={task.output} kind="dm" />}
+      {task.output && task.agentId === "reviewpulse" && <ReplyResult o={task.output} kind="review" />}
+      {task.output && task.agentId === "inventory-guardian" && <InventoryResult o={task.output} />}
+      {task.output && task.agentId === "rotabuilder" && <RotaResult o={task.output} />}
+      {task.output && task.agentId === "onboarding-buddy" && <OnboardingResult o={task.output} />}
+      <DeliveryLinks delivery={task.delivery} />
+      {task.output && !NATIVE_VIEWS.has(task.agentId) && !Array.isArray(task.output.heldBack) && typeof task.output.summary === "string" && (
         <p className="rounded-lg border bg-background p-4 text-sm whitespace-pre-line">{task.output.summary}</p>
       )}
 

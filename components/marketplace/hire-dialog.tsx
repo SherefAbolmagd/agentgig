@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, PlugZap } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AgentAvatar } from "@/components/brand";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConnectionsPanel } from "@/components/connections-panel";
+import { providerForTool, type Provider } from "@/lib/client/integrations";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { api, ApiError } from "@/lib/client/api";
 import { useKnowledge, useMe, type WithId } from "@/lib/client/firestore";
-import { TOOL_LABELS } from "@/lib/tools";
 import type { AgentDoc, HireDoc } from "@/types/firestore";
 
 interface Props {
@@ -25,8 +26,6 @@ export function HireDialog({ agent, existing, onClose }: Props) {
   const router = useRouter();
   const me = useMe();
   const knowledge = useKnowledge();
-  const [connected, setConnected] = useState<Set<string>>(new Set());
-  const [connecting, setConnecting] = useState<string | null>(null);
   const [triggerId, setTriggerId] = useState("");
   const [approvalMode, setApprovalMode] = useState<"ask" | "auto">("ask");
   const [access, setAccess] = useState<Set<string>>(new Set(["profile"]));
@@ -38,20 +37,12 @@ export function HireDialog({ agent, existing, onClose }: Props) {
     setTriggerId(existing?.trigger.id ?? agent.triggers[0]?.id ?? "");
     setApprovalMode(existing?.approvalMode ?? (agent.category === "Finance" ? "auto" : "ask"));
     setAccess(new Set(existing?.knowledgeAccess ?? ["profile"]));
-    setConnected(new Set(existing ? agent.tools : []));
     setCap(existing?.monthlyCapTokens ? String(existing.monthlyCapTokens) : "");
   }, [agent, existing]);
 
   if (!agent) return null;
-  const allConnected = agent.tools.every((t) => connected.has(t));
+  const providers = [...new Set(agent.tools.map(providerForTool).filter((p): p is Provider => !!p))];
   const hasProfile = !!me.data?.businessProfile;
-
-  async function connect(tool: string) {
-    setConnecting(tool);
-    await new Promise((r) => setTimeout(r, 700)); // stands in for the OAuth consent screen
-    setConnected((s) => new Set(s).add(tool));
-    setConnecting(null);
-  }
 
   async function save() {
     if (!agent) return;
@@ -89,26 +80,15 @@ export function HireDialog({ agent, existing, onClose }: Props) {
         </DialogHeader>
 
         <div className="grid gap-6 py-2">
-          <Step n={1} title={`Connect ${agent.tools.map((t) => TOOL_LABELS[t]).join(" and ")}`}>
-            <p className="text-sm text-muted-foreground">
-              {agent.name} works inside your accounts. We keep the sign-in, never your password, and the agent itself never sees it.
-            </p>
-            {agent.tools.map((tool) => (
-              <div key={tool} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
-                <span>{TOOL_LABELS[tool]}</span>
-                {connected.has(tool) ? (
-                  <span className="flex items-center gap-1 font-medium text-primary">
-                    <Check className="size-4" /> Connected
-                  </span>
-                ) : (
-                  <Button size="sm" variant="outline" onClick={() => connect(tool)} disabled={!!connecting}>
-                    {connecting === tool ? <Loader2 className="animate-spin" /> : <PlugZap />} Sign in
-                  </Button>
-                )}
-              </div>
-            ))}
-            <p className="text-xs text-muted-foreground">Demo connections are simulated; no real account is linked.</p>
-          </Step>
+          {providers.length > 0 && (
+            <Step n={1} title="Connect your tools (optional)">
+              <p className="text-sm text-muted-foreground">
+                {agent.name} acts in your own accounts. We keep the sign-in in Google Secret Manager; the agent itself never sees it. Without a connection it still works, and you
+                copy the results yourself.
+              </p>
+              <ConnectionsPanel providers={providers} returnTo={`/marketplace?hire=${agent.slug}`} compact />
+            </Step>
+          )}
 
           <Step n={2} title="When should it work?">
             <RadioGroup value={triggerId} onValueChange={setTriggerId} className="gap-2">
@@ -175,7 +155,7 @@ export function HireDialog({ agent, existing, onClose }: Props) {
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={!allConnected || !triggerId || saving || (cap !== "" && Number(cap) < agent.tokensPerTask)}>
+          <Button onClick={save} disabled={!triggerId || saving || (cap !== "" && Number(cap) < agent.tokensPerTask)}>
             {saving && <Loader2 className="animate-spin" />}
             {existing ? "Save settings" : `Hire ${agent.name}`}
           </Button>

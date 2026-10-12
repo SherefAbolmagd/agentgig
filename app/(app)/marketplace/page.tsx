@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Check, Search, Star } from "lucide-react";
 import { AgentAvatar, Coin } from "@/components/brand";
 import { HireDialog } from "@/components/marketplace/hire-dialog";
@@ -21,11 +22,27 @@ const CATEGORIES = [
 ] as const;
 
 export default function MarketplacePage() {
+  return (
+    <Suspense>
+      <Marketplace />
+    </Suspense>
+  );
+}
+
+function Marketplace() {
+  const params = useSearchParams();
   const agents = useAgents();
   const hires = useHires();
   const [category, setCategory] = useState<string>("All");
   const [q, setQ] = useState("");
   const [hiring, setHiring] = useState<WithId<AgentDoc> | null>(null);
+  // Coming back from a provider's sign-in reopens the wizard for the same agent.
+  const resume = params.get("hire");
+  useEffect(() => {
+    if (!resume || hiring) return;
+    const a = agents.data.find((x) => x.slug === resume);
+    if (a) setHiring(a);
+  }, [resume, agents.data, hiring]);
   const hired = new Set(hires.data.map((h) => h.agentId));
 
   const list = useMemo(() => {
@@ -108,12 +125,15 @@ function AgentCard({ agent: a, hired, onHire }: { agent: WithId<AgentDoc>; hired
           <h2 className="font-display text-lg font-bold leading-tight">{a.name}</h2>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             {a.provider.name}
-            {a.rating && (
+            {" · "}
+            {a.rating ? (
               <>
-                {" · "}
-                <Star className="size-3 fill-current" /> {a.rating} · {a.taskCount.toLocaleString()} tasks
+                <Star className="size-3 fill-current" /> {a.rating}
               </>
+            ) : (
+              "New"
             )}
+            {a.taskCount > 0 && ` · ${a.taskCount.toLocaleString()} tasks done`}
           </p>
         </div>
       </div>
@@ -128,7 +148,14 @@ function AgentCard({ agent: a, hired, onHire }: { agent: WithId<AgentDoc>; hired
       </div>
       <p className="flex-1 text-sm text-muted-foreground">{a.description}</p>
       <p className="text-xs text-muted-foreground">
-        Works in <span className="font-medium text-foreground">{a.tools.map((t) => TOOL_LABELS[t]).join(", ")}</span> · {a.triggers[0]?.label}
+        {a.tools.length ? (
+          <>
+            Works in <span className="font-medium text-foreground">{a.tools.map((t) => TOOL_LABELS[t]).join(", ")}</span>
+          </>
+        ) : (
+          "Works from what you paste in"
+        )}{" "}
+        · {a.triggers[0]?.label}
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
         <span className="flex items-center gap-1.5">

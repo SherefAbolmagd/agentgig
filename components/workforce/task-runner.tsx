@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/lib/client/api";
+import { DmConciergeForm, InventoryForm, OnboardingForm, ReviewForm, RotaForm } from "./agent-forms";
 import type { WithId } from "@/lib/client/firestore";
 import { TOOL_LABELS } from "@/lib/tools";
 import { cn } from "@/lib/utils";
@@ -158,6 +159,12 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
         </form>
       )}
 
+      {agent.slug === "dm-concierge" && <DmConciergeForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "inventory-guardian" && <InventoryForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "reviewpulse" && <ReviewForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "rotabuilder" && <RotaForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "onboarding-buddy" && <OnboardingForm agent={agent} busy={busy} run={run} />}
+
       {agent.slug === "echosocial" && (
         <form onSubmit={submitEchoSocial} className="grid gap-3">
           <div className="grid gap-3 sm:grid-cols-3">
@@ -260,7 +267,7 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
   );
 }
 
-function RunRow({ agent, busy, disabled }: { agent: AgentDoc; busy: boolean; disabled?: boolean }) {
+export function RunRow({ agent, busy, disabled }: { agent: AgentDoc; busy: boolean; disabled?: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-xs text-muted-foreground">You&apos;re only charged if the task succeeds.</p>

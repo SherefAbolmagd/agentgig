@@ -19,6 +19,7 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: file, fullPage: true });
   console.log(`  📸 ${file}`);
 }
+let current: Page | null = null;
 async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
   const t = Date.now();
   try {
@@ -27,6 +28,9 @@ async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
     return r;
   } catch (err) {
     console.log(`✗ ${label}: ${(err as Error).message.split("\n")[0]}`);
+    const file = `${OUT}/FAILED-${label.replace(/\W+/g, "-").slice(0, 40)}.png`;
+    await current?.screenshot({ path: file, fullPage: true }).catch(() => undefined);
+    console.log(`  📸 ${file}`);
     throw err;
   }
 }
@@ -35,6 +39,7 @@ async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 } });
   const page = await ctx.newPage();
+  current = page;
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   page.on("pageerror", (e) => errors.push(e.message));
 
@@ -63,9 +68,9 @@ async function main() {
 
     await step("Editing then approving the draft delivers the owner's version", async () => {
       await page.getByRole("button", { name: "Edit first" }).click();
-      const box = page.getByRole("textbox", { name: "Post text" });
+      const box = page.getByRole("textbox", { name: "Text to approve" });
       await box.waitFor();
-      await page.waitForFunction(() => (document.querySelector("textarea[aria-label='Post text']") as HTMLTextAreaElement)?.value.length > 50);
+      await page.waitForFunction(() => (document.querySelector("textarea[aria-label='Text to approve']") as HTMLTextAreaElement)?.value.length > 50);
       await box.fill("Manchester offices: fresh coffee, delivered weekly. Your first tasting box is on us. #Manchester #OfficeCoffee");
       await page.getByRole("button", { name: "Approve my version" }).click();
       await page.getByText(/You're all caught up/).waitFor({ timeout: 30_000 });
@@ -88,8 +93,8 @@ async function main() {
       const card = page.locator("article", { hasText: "VAT Reconciler" });
       await card.getByRole("button", { name: "Hire VAT" }).click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByRole("button", { name: "Sign in" }).click();
-      await dialog.getByText("Connected").waitFor();
+      // Demo sandboxes start with demo connections; real accounts would see "Connect Google".
+      await dialog.getByText(/\b(Demo|Connected)$/).first().waitFor();
       await dialog.getByLabel("Monthly token limit").fill("30");
       await shot(page, "hire-wizard");
       await dialog.getByRole("button", { name: "Hire VAT Reconciler" }).click();
@@ -141,6 +146,33 @@ async function main() {
       await shot(page, "inbox");
       const header = await page.locator("header").first().innerText();
       if (!/\b295\b/.test(header)) throw new Error(`expected 295 tokens after two inbox invoices, got: ${header.replace(/\s+/g, " ").slice(0, 120)}`);
+    });
+
+    await step("Inventory Guardian works out reorders from a stock file", async () => {
+      await page.getByRole("link", { name: "Marketplace" }).click();
+      await page.locator("article", { hasText: "Inventory Guardian" }).getByRole("button", { name: "Hire Inventory" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Hire Inventory Guardian" }).click();
+      await page.getByText("Inventory Guardian joined your team.").waitFor({ timeout: 15_000 });
+      await page.goto(`${BASE}/workforce?agent=inventory-guardian`);
+      await page.getByRole("button", { name: "Use sample stock" }).click();
+      await page.waitForFunction(() => (document.querySelector("#stockCsv") as HTMLTextAreaElement)?.value.includes("OAT-1L"));
+      await page.getByRole("button", { name: /Run now · 3 tokens/ }).click();
+      await page.getByText(/Reorder \d+ products?/).first().waitFor({ timeout: 90_000 });
+      await page.getByText("Order email · Lumen Supplies").waitFor();
+      await shot(page, "inventory");
+    });
+
+    await step("RotaBuilder builds and checks a week", async () => {
+      await page.getByRole("link", { name: "Marketplace" }).click();
+      await page.locator("article", { hasText: "RotaBuilder" }).getByRole("button", { name: "Hire RotaBuilder" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Hire RotaBuilder" }).click();
+      await page.getByText("RotaBuilder joined your team.").waitFor({ timeout: 15_000 });
+      await page.goto(`${BASE}/workforce?agent=rotabuilder`);
+      await page.getByRole("button", { name: "Use sample team" }).click();
+      await page.waitForFunction(() => (document.querySelector("#staffCsv") as HTMLTextAreaElement)?.value.includes("Amira"));
+      await page.getByRole("button", { name: /Run now · 4 tokens/ }).click();
+      await page.getByText(/Rota for \d{4}-\d{2}-\d{2} (is ready|has \d+ problems?)/).first().waitFor({ timeout: 120_000 });
+      await shot(page, "rota");
     });
 
     await step("marketplace lists all agents", async () => {

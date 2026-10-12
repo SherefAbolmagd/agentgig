@@ -17,10 +17,10 @@ export function ApprovalInbox({ agents, onOpenTask }: { agents: Map<string, Agen
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<WithId<ApprovalDoc> | null>(null);
 
-  async function decide(a: WithId<ApprovalDoc>, action: "approve" | "skip", editedText?: string) {
+  async function decide(a: WithId<ApprovalDoc>, action: "approve" | "skip", editedText?: string, postNow?: boolean) {
     setBusy(a.id);
     try {
-      await api(`/api/approvals/${a.id}`, { json: { action, editedText } });
+      await api(`/api/approvals/${a.id}`, { json: { action, editedText, postNow } });
       const name = agents.get(a.agentId)?.name ?? "The agent";
       toast.success(action === "approve" ? `Done. ${name} is carrying it out.` : "Skipped. Nothing was sent.");
       setEditing(null);
@@ -66,7 +66,7 @@ export function ApprovalInbox({ agents, onOpenTask }: { agents: Map<string, Agen
                       size="sm"
                       variant={i === 0 ? "default" : "outline"}
                       disabled={busy === a.id}
-                      onClick={() => (act.kind === "edit" ? setEditing(a) : decide(a, act.kind === "skip" ? "skip" : "approve"))}
+                      onClick={() => (act.kind === "edit" ? setEditing(a) : decide(a, act.kind === "skip" ? "skip" : "approve", undefined, act.id === "post_now"))}
                     >
                       {busy === a.id && i === 0 && <Loader2 className="animate-spin" />}
                       {act.label}
@@ -85,7 +85,8 @@ export function ApprovalInbox({ agents, onOpenTask }: { agents: Map<string, Agen
 
 function EditDialog({ approval, busy, onCancel, onSave }: { approval: WithId<ApprovalDoc>; busy: boolean; onCancel(): void; onSave(text: string): void }) {
   const task = useTask(approval.taskId);
-  const original = (task.data?.output?.text as string | undefined) ?? "";
+  const field = approval.editField ?? "text";
+  const original = (task.data?.output?.[field] as string | undefined) ?? "";
   const [text, setText] = useState<string | null>(null);
   const value = text ?? original;
 
@@ -94,9 +95,9 @@ function EditDialog({ approval, busy, onCancel, onSave }: { approval: WithId<App
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display">Edit before approving</DialogTitle>
-          <DialogDescription>EchoSocial keeps your edits as examples and writes closer to your style next time.</DialogDescription>
+          <DialogDescription>Your edits are kept as examples, so this agent writes closer to your style next time.</DialogDescription>
         </DialogHeader>
-        <Textarea value={value} onChange={(e) => setText(e.target.value)} rows={14} className="font-sans text-sm" aria-label="Post text" />
+        <Textarea value={value} onChange={(e) => setText(e.target.value)} rows={14} className="font-sans text-sm" aria-label="Text to approve" />
         <p className="text-right font-mono text-xs text-muted-foreground">{value.length} / 3000</p>
         <DialogFooter>
           <Button variant="ghost" onClick={onCancel}>

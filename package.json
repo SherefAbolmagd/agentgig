@@ -15,7 +15,8 @@
     "deploy:rules": "tsx scripts/deploy-rules.ts",
     "e2e": "tsx scripts/e2e.ts",
     "test:ops": "tsx --conditions=react-server scripts/test-ops.ts",
-    "verify": "npm run typecheck && npm run lint && npm test"
+    "verify": "npm run typecheck && npm run lint && npm test",
+    "push:secrets": "tsx scripts/push-secrets.ts"
   },
   "dependencies": {
     "@google-cloud/dlp": "^7.1.1",

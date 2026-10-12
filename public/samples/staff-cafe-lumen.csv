@@ -1,0 +1,6 @@
+name, role, max_hours, unavailable
+Amira, barista, 30, Mon
+Ben, barista, 20,
+Cleo, supervisor, 40, Sat Sun
+Dev, roaster, 25, Fri
+Eve, barista, 16, Tue Wed

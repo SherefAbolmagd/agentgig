@@ -1,5 +1,7 @@
 "use client";
+import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { RedirectFeedback } from "@/components/connect-feedback";
 import { Logo } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { SignInCard } from "@/components/sign-in-card";
@@ -50,6 +52,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <SiteHeader />
+      <Suspense>
+        <RedirectFeedback />
+      </Suspense>
       <main className="mx-auto max-w-7xl px-4 pb-20 pt-8 sm:px-6">{children}</main>
     </>
   );

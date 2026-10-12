@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { FileText, Loader2, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { ConnectionsPanel } from "@/components/connections-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +27,16 @@ export default function KnowledgePage() {
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         {me.loading ? <Skeleton className="h-[640px] rounded-xl" /> : <ProfileForm key={me.data?.businessName} businessName={me.data?.businessName ?? ""} profile={me.data?.businessProfile} />}
-        <Files />
+        <div className="grid gap-6">
+          <section className="grid gap-3 rounded-xl border bg-card p-5">
+            <div>
+              <h2 className="font-display text-lg font-bold">Connections</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Let agents act in your own tools. You can disconnect any time; that deletes the stored access.</p>
+            </div>
+            <ConnectionsPanel returnTo="/knowledge" />
+          </section>
+          <Files />
+        </div>
       </div>
     </div>
   );

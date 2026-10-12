@@ -18,6 +18,7 @@ import {
 import { api, ApiError } from "@/lib/client/api";
 import { useAuth } from "@/lib/client/auth";
 import { useMe, useOpenApprovals } from "@/lib/client/firestore";
+import { useIntegrationStatus } from "@/lib/client/integrations";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -66,20 +67,40 @@ export function SiteHeader() {
   );
 }
 
+const BUNDLES = [
+  { id: "starter", tokens: 500, price: "$49", note: "About 100 LinkedIn posts or 250 receipts" },
+  { id: "growth", tokens: 1500, price: "$129", note: "Best value for a busy team" },
+] as const;
+
 function Wallet() {
   const me = useMe();
-  const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  const status = useIntegrationStatus();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const balance = me.data?.tokenBalance;
+  const card = !!status?.payments && !!user && !user.isAnonymous;
 
-  async function buy() {
-    setBusy(true);
+  async function demoTopUp() {
+    setBusy("demo");
     try {
       const res = await api<{ balance: number }>("/api/tokens/topup");
-      toast.success(`Added 500 tokens. Your balance is ${res.balance}.`, { description: "Payment of $49 simulated for the demo." });
+      toast.success(`Added 500 demo tokens. Your balance is ${res.balance}.`, { description: "Free in the demo; create an account to buy real tokens." });
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Top-up failed. Try again.");
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  }
+
+  async function checkout(bundle: string) {
+    setBusy(bundle);
+    try {
+      const { url } = await api<{ url: string }>("/api/billing/checkout", { json: { bundle } });
+      window.location.assign(url);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't open checkout. Try again.");
+      setBusy(null);
     }
   }
 
@@ -90,9 +111,42 @@ function Wallet() {
         <div className={cn("font-mono text-lg font-medium tabular-nums", balance !== undefined && balance < 20 && "text-destructive")}>{balance ?? "–"}</div>
         <div className="text-[11px] text-muted-foreground">tokens</div>
       </div>
-      <Button size="sm" variant="ghost" className="bg-token-soft text-token hover:bg-token-soft/80 hover:text-token" onClick={buy} disabled={busy || balance === undefined}>
-        <Plus /> 500 · $49
-      </Button>
+      {card ? (
+        <Button size="sm" variant="ghost" className="bg-token-soft text-token hover:bg-token-soft/80 hover:text-token" onClick={() => setOpen(true)} disabled={balance === undefined}>
+          <Plus /> Buy tokens
+        </Button>
+      ) : (
+        <Button size="sm" variant="ghost" className="bg-token-soft text-token hover:bg-token-soft/80 hover:text-token" onClick={demoTopUp} disabled={!!busy || balance === undefined}>
+          {busy === "demo" ? <Loader2 className="animate-spin" /> : <Plus />} 500 free (demo)
+        </Button>
+      )}
+      <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Buy tokens</DialogTitle>
+            <DialogDescription>Pay by card with Stripe. Tokens never expire, and you&apos;re only charged for tasks that finish.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {BUNDLES.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => checkout(b.id)}
+                disabled={!!busy}
+                className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left hover:border-primary disabled:opacity-60"
+              >
+                <span>
+                  <span className="block font-mono text-lg font-medium">{b.tokens.toLocaleString()} tokens</span>
+                  <span className="text-xs text-muted-foreground">{b.note}</span>
+                </span>
+                <span className="flex items-center gap-2 font-semibold">
+                  {busy === b.id && <Loader2 className="size-4 animate-spin" />}
+                  {b.price}
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

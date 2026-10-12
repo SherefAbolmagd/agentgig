@@ -12,9 +12,9 @@ import { TaskConsole } from "@/components/workforce/task-console";
 import { TaskResult } from "@/components/workforce/task-result";
 import { TaskRunner } from "@/components/workforce/task-runner";
 import { useAuth } from "@/lib/client/auth";
-import { useAgents, useHires, useMe, useOpenApprovals, useRecentTasks, useTask } from "@/lib/client/firestore";
+import { useAgents, useConnections, useHires, useMe, useOpenApprovals, useRecentTasks, useTask } from "@/lib/client/firestore";
+import { PROVIDER_INFO, providerForTool, type Provider } from "@/lib/client/integrations";
 import { greeting } from "@/lib/client/format";
-import { TOOL_LABELS } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { AgentDoc } from "@/types/firestore";
 
@@ -50,7 +50,8 @@ function Workforce() {
   const task = useTask(shownTaskId);
 
   const name = me.data?.displayName?.split(" ")[0];
-  const connections = [...new Set(team.flatMap((m) => m.agent.tools))];
+  const conns = useConnections();
+  const providers = [...new Set(team.flatMap((m) => m.agent.tools.map(providerForTool)).filter((p): p is Provider => !!p))];
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
@@ -101,14 +102,22 @@ function Workforce() {
                 </Link>
               </li>
             </ul>
-            {connections.length > 0 && (
+            {providers.length > 0 && (
               <div className="grid gap-1.5 border-t px-4 py-3 text-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Connected tools</p>
-                {connections.map((t) => (
-                  <p key={t} className="flex justify-between">
-                    {TOOL_LABELS[t]} <span className="font-medium text-primary">Connected</span>
-                  </p>
-                ))}
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tools</p>
+                {providers.map((p) => {
+                  const c = conns.data.find((x) => x.provider === p && x.status === "active");
+                  const state = !c ? "Not connected" : c.secretRef === "simulated" ? "Demo" : "Connected";
+                  return (
+                    <p key={p} className="flex justify-between">
+                      {PROVIDER_INFO[p].name}
+                      <span className={cn("font-medium", state === "Connected" ? "text-primary" : state === "Demo" ? "text-token" : "text-muted-foreground")}>{state}</span>
+                    </p>
+                  );
+                })}
+                <Link href="/knowledge" className="text-xs font-medium text-primary hover:underline">
+                  Manage connections
+                </Link>
               </div>
             )}
           </section>

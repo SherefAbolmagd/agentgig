@@ -1,0 +1,6 @@
+SKU,Product,On hand,Sold last 7 days,Unit cost,Supplier,Supplier email
+OAT-1L,"Oat milk 1L, case of 6",4,21,14.40,Lumen Supplies,orders@lumensupplies.example
+BEAN-1K,Espresso beans 1kg,9,14,18.50,Lumen Supplies,orders@lumensupplies.example
+DECAF-1K,Decaf beans 1kg,6,2,19.00,Lumen Supplies,orders@lumensupplies.example
+CUP-12,Paper cups 12oz x100,3,6,9.90,Northern Paper Co,sales@northernpaper.example
+LID-12,Cup lids 12oz x100,25,6,4.20,Northern Paper Co,sales@northernpaper.example

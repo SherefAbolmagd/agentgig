@@ -95,6 +95,7 @@ export const echoSocial = defineAgent<EchoSocialInput, EchoSocialOutput>({
       severity: "info",
       actions: [
         { id: "approve", label: "Approve & schedule", kind: "approve" },
+        { id: "post_now", label: "Post now", kind: "approve" },
         { id: "edit", label: "Edit first", kind: "edit" },
         { id: "skip", label: "Skip", kind: "skip" },
       ],
