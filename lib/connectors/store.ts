@@ -1,6 +1,6 @@
 import "server-only";
-import { shopifyFindOrders, shopifyLapsedCustomers, shopifyProducts } from "./shopify";
-import { wooFindOrders, wooLapsedCustomers, wooProducts } from "./woocommerce";
+import { shopifyDeliveredOrders, shopifyFindOrders, shopifyLapsedCustomers, shopifyProducts } from "./shopify";
+import { wooDeliveredOrders, wooFindOrders, wooLapsedCustomers, wooProducts } from "./woocommerce";
 
 /**
  * One view of the owner's online store, whichever platform it runs on.
@@ -39,6 +39,22 @@ export interface StoreCustomer {
   marketingConsent: boolean;
 }
 
+export interface StoreDeliveredOrder {
+  number: string;
+  firstName: string;
+  email: string;
+  items: string[];
+  deliveredAt: string;
+  refunded: boolean;
+  marketingConsent: boolean;
+}
+
+/** True when an ISO time is between `fromDays` and `toDays` days ago. */
+export function inWindow(iso: string, fromDays: number, toDays: number, now = Date.now()): boolean {
+  const age = (now - Date.parse(iso)) / 86_400_000;
+  return age >= fromDays && age <= toDays;
+}
+
 export type StoreSource = "shopify" | "woocommerce";
 
 export async function storeProducts(userId: string): Promise<{ source: StoreSource; products: StoreProduct[] } | null> {
@@ -60,4 +76,11 @@ export async function storeLapsedCustomers(userId: string, days: number): Promis
   if (s) return { source: "shopify", customers: s };
   const w = await wooLapsedCustomers(userId, days);
   return w ? { source: "woocommerce", customers: w } : null;
+}
+
+export async function storeDeliveredOrders(userId: string, fromDays: number, toDays: number): Promise<{ source: StoreSource; orders: StoreDeliveredOrder[] } | null> {
+  const s = await shopifyDeliveredOrders(userId, fromDays, toDays);
+  if (s) return { source: "shopify", orders: s };
+  const w = await wooDeliveredOrders(userId, fromDays, toDays);
+  return w ? { source: "woocommerce", orders: w } : null;
 }

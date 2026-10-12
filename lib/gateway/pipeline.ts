@@ -182,12 +182,19 @@ function checkFiles(handler: AnyNativeAgent, files: UploadedFile[]) {
   if (files.length > 1) throw new GatewayError("INVALID_INPUT", "Attach one file per task.");
   for (const f of files) {
     if (!rules.mimeTypes.includes(f.mimeType)) {
-      throw new GatewayError("INVALID_INPUT", `“${f.name}” is a ${f.mimeType} file. Upload a PDF, JPEG, PNG or WebP.`);
+      throw new GatewayError("INVALID_INPUT", `“${f.name}” is a ${f.mimeType || "unknown"} file. Upload ${fileKinds(rules.mimeTypes)}.`);
     }
     if (f.data.length > rules.maxBytes) {
       throw new GatewayError("INVALID_INPUT", `“${f.name}” is larger than ${rules.maxBytes / 1024 / 1024} MB.`);
     }
   }
+}
+
+const KIND_NAMES: Record<string, string> = { "application/pdf": "PDF", "image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WebP", "text/plain": "TXT", "text/markdown": "Markdown" };
+
+function fileKinds(types: readonly string[]): string {
+  const names = [...new Set(types.map((t) => KIND_NAMES[t] ?? t))];
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}` : `a ${names[0]}`;
 }
 
 async function recordRejected(req: RunTaskRequest, agent: AgentDoc, handler: AnyNativeAgent, err: GatewayError) {

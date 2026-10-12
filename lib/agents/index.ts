@@ -1,5 +1,13 @@
 import { bookingPrep } from "./booking-prep";
 import { bookkeeper } from "./bookkeeper";
+import { cashflowForecast } from "./cashflow-forecast";
+import { deadlineKeeper } from "./deadline-keeper";
+import { hiringAssistant } from "./hiring-assistant";
+import { invoiceChaser } from "./invoice-chaser";
+import { meetingActions } from "./meeting-actions";
+import { proposalWriter } from "./proposal-writer";
+import { quoteBuilder } from "./quote-builder";
+import { reviewRequester } from "./review-requester";
 import { dmConcierge } from "./dm-concierge";
 import { echoSocial } from "./echosocial";
 import { inventoryGuardian } from "./inventory-guardian";
@@ -31,6 +39,14 @@ export const NATIVE_AGENTS: Record<string, AnyNativeAgent> = Object.fromEntries(
     leadFollowup,
     bookkeeper,
     bookingPrep,
+    invoiceChaser,
+    quoteBuilder,
+    cashflowForecast,
+    proposalWriter,
+    reviewRequester,
+    hiringAssistant,
+    deadlineKeeper,
+    meetingActions,
   ].map((a) => [a.slug, a]),
 );
 

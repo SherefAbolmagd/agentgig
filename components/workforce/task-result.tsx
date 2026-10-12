@@ -4,13 +4,21 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   BookingResult,
   BookkeeperResult,
+  CashflowResult,
+  DeadlineResult,
   DeliveryLinks,
+  HiringResult,
+  InvoiceChaserResult,
   InventoryResult,
   LeadResult,
+  MeetingResult,
   NewsletterResult,
   OnboardingResult,
+  ProposalResult,
+  QuoteResult,
   ReplyResult,
   RevenueResult,
+  ReviewRequestResult,
   RotaResult,
   WinbackResult,
 } from "./agent-results";
@@ -30,6 +38,14 @@ const NATIVE_VIEWS = new Set([
   "lead-followup",
   "bookkeeper",
   "booking-prep",
+  "invoice-chaser",
+  "quote-builder",
+  "cashflow-forecast",
+  "proposal-writer",
+  "review-requester",
+  "hiring-assistant",
+  "deadline-keeper",
+  "meeting-actions",
 ]);
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { money, STATUS, TONE_CLASSES } from "@/lib/client/format";
@@ -78,6 +94,14 @@ export function TaskResult({ task, businessName }: { task: Task | null; business
       {task.output && task.agentId === "lead-followup" && <LeadResult o={task.output} />}
       {task.output && task.agentId === "bookkeeper" && <BookkeeperResult o={task.output} />}
       {task.output && task.agentId === "booking-prep" && <BookingResult o={task.output} />}
+      {task.output && task.agentId === "invoice-chaser" && <InvoiceChaserResult o={task.output} />}
+      {task.output && task.agentId === "quote-builder" && <QuoteResult o={task.output} />}
+      {task.output && task.agentId === "cashflow-forecast" && <CashflowResult o={task.output} />}
+      {task.output && task.agentId === "proposal-writer" && <ProposalResult o={task.output} />}
+      {task.output && task.agentId === "review-requester" && <ReviewRequestResult o={task.output} />}
+      {task.output && task.agentId === "hiring-assistant" && <HiringResult o={task.output} />}
+      {task.output && task.agentId === "deadline-keeper" && <DeadlineResult o={task.output} />}
+      {task.output && task.agentId === "meeting-actions" && <MeetingResult o={task.output} />}
       <DeliveryLinks delivery={task.delivery} />
       {task.output && !NATIVE_VIEWS.has(task.agentId) && !Array.isArray(task.output.heldBack) && typeof task.output.summary === "string" && (
         <p className="rounded-lg border bg-background p-4 text-sm whitespace-pre-line">{task.output.summary}</p>

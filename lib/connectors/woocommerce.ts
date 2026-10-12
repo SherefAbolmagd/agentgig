@@ -6,7 +6,7 @@ import { env } from "@/lib/env";
 import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
 import { keyFields, saveKeyConnection, vendorFetch, type KeyTester } from "./keys";
-import type { StoreCustomer, StoreOrder, StoreProduct } from "./store";
+import { inWindow, type StoreCustomer, type StoreDeliveredOrder, type StoreOrder, type StoreProduct } from "./store";
 
 /**
  * WooCommerce REST API (wc/v3) with consumer key/secret. Owners connect with
@@ -149,4 +149,28 @@ export async function wooLapsedCustomers(userId: string, days: number): Promise<
   }
   const cutoff = Date.now() - days * 86_400_000;
   return [...byEmail.values()].filter((c) => Date.parse(c.lastOrderAt + "Z") < cutoff);
+}
+
+/** Completed orders whose completion falls between `fromDays` and `toDays` days ago. */
+export async function wooDeliveredOrders(userId: string, fromDays: number, toDays: number): Promise<StoreDeliveredOrder[] | null> {
+  const k = await keyFields(userId, "woocommerce");
+  if (!k) return null;
+  const after = new Date(Date.now() - toDays * 86_400_000).toISOString();
+  const orders = await wc<(WooOrder & { date_completed_gmt: string | null; refunds: unknown[] })[]>(
+    k.fields,
+    `/orders?per_page=100&status=completed&modified_after=${encodeURIComponent(after)}`,
+  );
+  return orders
+    .filter((o) => o.date_completed_gmt && o.billing.email)
+    .map((o) => ({
+      number: `#${o.number}`,
+      firstName: o.billing.first_name,
+      email: o.billing.email,
+      items: o.line_items.slice(0, 5).map((l) => l.name),
+      deliveredAt: `${o.date_completed_gmt}Z`,
+      refunded: o.refunds.length > 0,
+      // WooCommerce has no standard marketing-consent field.
+      marketingConsent: false,
+    }))
+    .filter((o) => inWindow(o.deliveredAt, fromDays, toDays));
 }

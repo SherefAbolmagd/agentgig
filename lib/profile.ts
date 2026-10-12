@@ -11,6 +11,13 @@ export const BusinessProfileSchema = z.object({
   website: z.union([z.url({ protocol: /^https?$/ }), z.literal("")]).optional(),
   location: z.string().trim().max(120).optional(),
   openingHours: z.string().trim().max(120).optional(),
+  reviewUrl: z.union([z.url({ protocol: /^https$/ }), z.literal("")]).optional(),
+  companyNumber: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^([0-9]{8}|[A-Z]{2}[0-9]{6})$/, "Companies House numbers are 8 characters, e.g. 01234567 or SC123456")
+    .optional(),
   timeZone: z
     .string()
     .refine((tz) => Intl.supportedValuesOf("timeZone").includes(tz) || tz === "UTC", "Choose a valid time zone")

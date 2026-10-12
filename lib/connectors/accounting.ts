@@ -106,3 +106,123 @@ async function quickbooksBill(conn: Conn, b: BillInput): Promise<BillResult> {
   const app = conn.meta?.sandbox ? "https://app.sandbox.qbo.intuit.com" : "https://app.qbo.intuit.com";
   return { system: "quickbooks", id: res.Bill.Id, url: `${app}/app/bill?txnId=${res.Bill.Id}` };
 }
+
+/* ------------------------------------------------------------------ */
+/* Reading what's owed (sales invoices) and what's due (bills)         */
+/* ------------------------------------------------------------------ */
+
+export interface OpenItem {
+  id: string;
+  number: string | null;
+  contact: string;
+  email: string | null;
+  issueDate: string | null;
+  dueDate: string | null;
+  total: number;
+  amountDue: number;
+  currency: string;
+  url: string;
+}
+
+export interface OpenItems {
+  system: "xero" | "quickbooks";
+  /** Customer invoices not yet fully paid. */
+  receivable: OpenItem[];
+  /** Supplier bills not yet fully paid. */
+  payable: OpenItem[];
+}
+
+/** Unpaid sales invoices and bills from Xero or QuickBooks. Null if neither is connected. */
+export async function openItems(userId: string): Promise<OpenItems | null> {
+  const xero = await getConnection(userId, "xero");
+  if (xero) return xeroOpenItems(xero);
+  const qbo = await getConnection(userId, "quickbooks");
+  if (qbo) return quickbooksOpenItems(qbo);
+  return null;
+}
+
+const day = (s: string | undefined | null) => (s ? s.slice(0, 10) : null);
+
+interface XeroInvoice {
+  InvoiceID: string;
+  InvoiceNumber?: string;
+  Type: "ACCREC" | "ACCPAY";
+  Contact: { ContactID: string; Name: string };
+  DateString?: string;
+  DueDateString?: string;
+  Total: number;
+  AmountDue: number;
+  CurrencyCode: string;
+}
+
+async function xeroOpenItems(conn: Conn): Promise<OpenItems> {
+  const token = await accessToken(conn);
+  const headers = { authorization: `Bearer ${token}`, "xero-tenant-id": String(conn.meta?.tenantId), accept: "application/json" };
+  const invoices: XeroInvoice[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const res = await vendorFetch<{ Invoices: XeroInvoice[] }>("Xero", `https://api.xero.com/api.xro/2.0/Invoices?Statuses=AUTHORISED&page=${page}`, { headers });
+    invoices.push(...res.Invoices);
+    if (res.Invoices.length < 100) break;
+  }
+  const open = invoices.filter((i) => i.AmountDue > 0);
+  // Invoice lists only carry the contact's name; emails come from Contacts.
+  const ids = [...new Set(open.filter((i) => i.Type === "ACCREC").map((i) => i.Contact.ContactID))];
+  const emails = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const res = await vendorFetch<{ Contacts: { ContactID: string; EmailAddress?: string }[] }>("Xero", `https://api.xero.com/api.xro/2.0/Contacts?IDs=${ids.slice(i, i + 50).join(",")}`, { headers });
+    for (const c of res.Contacts) if (c.EmailAddress) emails.set(c.ContactID, c.EmailAddress);
+  }
+  const item = (i: XeroInvoice): OpenItem => ({
+    id: i.InvoiceID,
+    number: i.InvoiceNumber || null,
+    contact: i.Contact.Name,
+    email: emails.get(i.Contact.ContactID) ?? null,
+    issueDate: day(i.DateString),
+    dueDate: day(i.DueDateString),
+    total: i.Total,
+    amountDue: i.AmountDue,
+    currency: i.CurrencyCode,
+    url: `https://go.xero.com/${i.Type === "ACCREC" ? "AccountsReceivable" : "AccountsPayable"}/View.aspx?InvoiceID=${i.InvoiceID}`,
+  });
+  return { system: "xero", receivable: open.filter((i) => i.Type === "ACCREC").map(item), payable: open.filter((i) => i.Type === "ACCPAY").map(item) };
+}
+
+interface QboTxn {
+  Id: string;
+  DocNumber?: string;
+  TxnDate?: string;
+  DueDate?: string;
+  TotalAmt: number;
+  Balance: number;
+  CurrencyRef?: { value: string };
+  CustomerRef?: { name?: string };
+  VendorRef?: { name?: string };
+  BillEmail?: { Address?: string };
+}
+
+async function quickbooksOpenItems(conn: Conn): Promise<OpenItems> {
+  const token = await accessToken(conn);
+  const realm = String(conn.meta?.realmId);
+  const host = conn.meta?.sandbox ? "https://sandbox-quickbooks.api.intuit.com" : "https://quickbooks.api.intuit.com";
+  const app = conn.meta?.sandbox ? "https://app.sandbox.qbo.intuit.com" : "https://app.qbo.intuit.com";
+  const headers = { authorization: `Bearer ${token}`, accept: "application/json" };
+  const query = async (entity: "Invoice" | "Bill") => {
+    const q = encodeURIComponent(`select * from ${entity} where Balance > '0' maxresults 500`);
+    const res = await vendorFetch<{ QueryResponse: Record<string, QboTxn[] | undefined> }>("QuickBooks", `${host}/v3/company/${realm}/query?query=${q}&minorversion=73`, { headers });
+    return res.QueryResponse[entity] ?? [];
+  };
+  const item = (t: QboTxn, kind: "invoice" | "bill"): OpenItem => ({
+    id: t.Id,
+    number: t.DocNumber ?? null,
+    contact: (kind === "invoice" ? t.CustomerRef?.name : t.VendorRef?.name) ?? "Unknown",
+    email: kind === "invoice" ? (t.BillEmail?.Address ?? null) : null,
+    issueDate: day(t.TxnDate),
+    dueDate: day(t.DueDate),
+    total: t.TotalAmt,
+    amountDue: t.Balance,
+    currency: t.CurrencyRef?.value ?? "USD",
+    url: `${app}/app/${kind}?txnId=${t.Id}`,
+  });
+  const [invoices, bills] = await Promise.all([query("Invoice"), query("Bill")]);
+  return { system: "quickbooks", receivable: invoices.map((t) => item(t, "invoice")), payable: bills.map((t) => item(t, "bill")) };
+}

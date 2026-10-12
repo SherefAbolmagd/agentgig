@@ -1,7 +1,7 @@
 import "server-only";
 import { GatewayError } from "@/lib/errors";
 import { keyFields, vendorFetch, type KeyTester } from "./keys";
-import type { StoreCustomer, StoreOrder, StoreProduct } from "./store";
+import { inWindow, type StoreCustomer, type StoreDeliveredOrder, type StoreOrder, type StoreProduct } from "./store";
 
 /** Shopify Admin GraphQL API, authenticated with a custom app's access token. */
 
@@ -139,4 +139,43 @@ export async function shopifyLapsedCustomers(userId: string, days: number): Prom
       lastOrderAt: n.lastOrder!.createdAt,
       marketingConsent: n.emailMarketingConsent?.marketingState === "SUBSCRIBED",
     }));
+}
+
+/** Orders delivered (or fulfilled) between `fromDays` and `toDays` days ago. */
+export async function shopifyDeliveredOrders(userId: string, fromDays: number, toDays: number): Promise<StoreDeliveredOrder[] | null> {
+  const c = await creds(userId);
+  if (!c) return null;
+  const since = new Date(Date.now() - toDays * 86_400_000).toISOString();
+  const data = await gql<{
+    orders: {
+      nodes: {
+        name: string;
+        email: string | null;
+        displayFinancialStatus: string;
+        customer: { firstName: string | null; emailMarketingConsent: { marketingState: string } | null } | null;
+        lineItems: { nodes: { name: string }[] };
+        fulfillments: { createdAt: string; deliveredAt: string | null }[];
+      }[];
+    };
+  }>(
+    c.shop,
+    c.token,
+    `query($q: String!) { orders(first: 100, query: $q, sortKey: UPDATED_AT, reverse: true) { nodes {
+      name email displayFinancialStatus customer { firstName emailMarketingConsent { marketingState } }
+      lineItems(first: 5) { nodes { name } } fulfillments { createdAt deliveredAt } } } }`,
+    { q: `fulfillment_status:shipped AND updated_at:>=${since}` },
+  );
+  return data.orders.nodes.flatMap((o) => {
+    const done = o.fulfillments.map((f) => f.deliveredAt ?? f.createdAt).sort().pop();
+    if (!done || !o.email) return [];
+    return [{
+      number: o.name,
+      firstName: o.customer?.firstName ?? "",
+      email: o.email,
+      items: o.lineItems.nodes.map((l) => l.name),
+      deliveredAt: done,
+      refunded: /refund/i.test(o.displayFinancialStatus),
+      marketingConsent: o.customer?.emailMarketingConsent?.marketingState === "SUBSCRIBED",
+    }];
+  }).filter((o) => inWindow(o.deliveredAt, fromDays, toDays));
 }

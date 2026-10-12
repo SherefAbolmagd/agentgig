@@ -153,3 +153,36 @@ export async function calendarEvents(userId: string, from: Date, to: Date): Prom
       meetLink: e.hangoutLink ?? null,
     }));
 }
+
+/**
+ * Creates a Google Doc from simple HTML (Drive converts it on upload). Uses the
+ * drive.file scope, so AgentGig can only see files it created.
+ */
+export async function docsCreate(userId: string, title: string, html: string): Promise<{ id: string; url: string } | null> {
+  const g = await google(userId);
+  if (!g) return null;
+  const boundary = `agentgig${Date.now().toString(36)}`;
+  const body = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify({ name: title, mimeType: "application/vnd.google-apps.document" }),
+    `--${boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "",
+    html,
+    `--${boundary}--`,
+  ].join("\r\n");
+  const file = await call<{ id: string; webViewLink: string }>(g.token, "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+    method: "POST",
+    headers: { "content-type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  return { id: file.id, url: file.webViewLink };
+}
+
+/** The connected Google account's address, for drafts the owner sends to themselves. */
+export async function googleSelf(userId: string): Promise<string | null> {
+  const conn = await getConnection(userId, "google");
+  return conn?.accountLabel.split("·").pop()?.trim() || null;
+}

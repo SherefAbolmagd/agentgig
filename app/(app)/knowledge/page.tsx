@@ -51,6 +51,8 @@ const FIELDS: { name: keyof BusinessProfile; label: string; hint: string; multil
   { name: "location", label: "Location", hint: "City or area you serve" },
   { name: "openingHours", label: "Opening hours", hint: "e.g. Mon–Fri 07:00–17:00" },
   { name: "timeZone", label: "Time zone", hint: "Used to schedule posts, e.g. Europe/London" },
+  { name: "reviewUrl", label: "Review link", hint: "Where customers leave a review, e.g. your Google review link (https://g.page/r/…/review)" },
+  { name: "companyNumber", label: "Companies House number", hint: "UK limited companies only. Used for filing deadlines." },
 ];
 
 function ProfileForm({ businessName, profile }: { businessName: string; profile?: BusinessProfile }) {

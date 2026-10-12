@@ -51,6 +51,10 @@ export interface BusinessProfile {
   website?: string;
   location?: string;
   openingHours?: string;
+  /** Where customers leave a review, e.g. a Google review link. */
+  reviewUrl?: string;
+  /** UK Companies House number, for filing deadlines. */
+  companyNumber?: string;
   /** IANA zone used for scheduling, e.g. "Europe/London". */
   timeZone?: string;
 }

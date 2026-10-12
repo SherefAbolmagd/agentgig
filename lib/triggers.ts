@@ -155,7 +155,7 @@ export async function queueDueSchedules(now = new Date()) {
     const since = Math.max(hire.lastTriggeredAt?.toMillis() ?? hire.createdAt.toMillis(), now.getTime() - LOOKBACK_MS);
     if (due.getTime() <= since) continue;
 
-    const input = scheduledInput(agent, user, hire);
+    const input = await scheduledInput(agent, user, hire);
     if (!input) {
       results.push({ hire: doc.id, outcome: "skipped: business profile incomplete" });
       continue;
@@ -174,7 +174,17 @@ export async function queueDueSchedules(now = new Date()) {
 }
 
 /** What a scheduled run asks for, built from the business profile. Null when there isn't enough to go on. */
-function scheduledInput(agent: AgentDoc, user: UserDoc, hire: HireDoc): Record<string, unknown> | null {
+async function lastManualInput(userId: string, agentId: string): Promise<Record<string, unknown> | null> {
+  // Equality filters only, so no composite index is needed; an owner has few tasks per agent.
+  const snap = await db().collection(COLLECTIONS.tasks).where("userId", "==", userId).where("agentId", "==", agentId).get();
+  const last = snap.docs
+    .map((d) => d.data() as TaskDoc)
+    .filter((t) => t.origin === "manual" && t.status !== "failed")
+    .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())[0];
+  return last?.input ?? null;
+}
+
+async function scheduledInput(agent: AgentDoc, user: UserDoc, hire: HireDoc): Promise<Record<string, unknown> | null> {
   const p = user.businessProfile;
   switch (agent.skills[0]?.id) {
     case "linkedin.post":
@@ -192,6 +202,14 @@ function scheduledInput(agent: AgentDoc, user: UserDoc, hire: HireDoc): Record<s
       return { sinceDays: new Date().getUTCDay() === 1 ? 3 : 1 };
     case "bills.book":
       return { period: "last-month" };
+    case "invoices.chase":
+      return (await lastManualInput(hire.userId, agent.slug)) ?? {};
+    case "reviews.request":
+      return p?.reviewUrl ? {} : null;
+    case "deadlines.track": {
+      const last = await lastManualInput(hire.userId, agent.slug);
+      return last ?? (p?.companyNumber ? {} : null);
+    }
     default:
       return agent.source === "a2a" ? { request: `Scheduled run: ${hire.trigger.label}` } : null;
   }

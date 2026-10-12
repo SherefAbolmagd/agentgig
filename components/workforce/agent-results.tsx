@@ -431,3 +431,341 @@ export function BookingResult({ o }: { o: Out }) {
     </ul>
   );
 }
+
+const STAGE_TONE: Record<string, string> = { friendly: "text-muted-foreground", firm: "text-token", final: "font-semibold text-destructive" };
+
+export function InvoiceChaserResult({ o }: { o: Out }) {
+  const chasing = (o.chasing as { key: string; number: string | null; customer: string; amountDue: number; currency: string; daysOverdue: number; stage: string; url: string }[]) ?? [];
+  const noEmail = (o.noEmail as { key: string; customer: string; number: string | null }[]) ?? [];
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm">
+        {o.currency ? `${amount(o.totalOverdue, o.currency)} overdue in total.` : "Nothing overdue."}
+        {Number(o.recentlyChased) > 0 && ` ${o.recentlyChased} invoice(s) were chased in the last week and are left alone.`}
+      </p>
+      {chasing.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead className="text-right">Owed</TableHead>
+                <TableHead className="text-right">Days late</TableHead>
+                <TableHead>Tone</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {chasing.map((c) => (
+                <TableRow key={c.key}>
+                  <TableCell>
+                    {c.customer}
+                    <a href={c.url} target="_blank" rel="noreferrer" className="block text-xs text-primary hover:underline">
+                      {c.number ? `Invoice ${c.number}` : "Open invoice"}
+                    </a>
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-[13px]">{amount(c.amountDue, c.currency)}</TableCell>
+                  <TableCell className="text-right font-mono text-[13px]">{c.daysOverdue}</TableCell>
+                  <TableCell className={cn("text-xs capitalize", STAGE_TONE[c.stage])}>{c.stage}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      {noEmail.length > 0 && <p className="text-xs text-muted-foreground">No email in your books for: {noEmail.map((n) => n.customer).join(", ")}. Add one to chase them.</p>}
+      <EmailsResult emails={(o.emails as Email[]) ?? []} empty="No reminders needed today." />
+    </div>
+  );
+}
+
+export function QuoteResult({ o }: { o: Out }) {
+  const lines = (o.lines as { description: string; quantity: number; unitPrice: number; amount: number; fromPriceList: boolean }[]) ?? [];
+  const cur = o.currency;
+  const text = [
+    String(o.intro ?? ""),
+    "",
+    ...lines.map((l) => `• ${l.description}: ${l.quantity} × ${amount(l.unitPrice, cur)} = ${amount(l.amount, cur)}`),
+    "",
+    `Subtotal ${amount(o.subtotal, cur)} · VAT (${o.vatRate}%) ${amount(o.vat, cur)} · Total ${amount(o.total, cur)}`,
+  ].join("\n");
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm">{String(o.intro ?? "")}</p>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead className="text-right">Each</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="font-mono text-[13px]">
+            {lines.map((l, i) => (
+              <TableRow key={i}>
+                <TableCell className="font-sans">
+                  {l.description}
+                  {!l.fromPriceList && <span className="ml-2 rounded bg-token-soft px-1.5 py-0.5 text-[10px] font-semibold text-token">Estimate</span>}
+                </TableCell>
+                <TableCell className="text-right">{l.quantity}</TableCell>
+                <TableCell className="text-right">{amount(l.unitPrice, cur)}</TableCell>
+                <TableCell className="text-right">{amount(l.amount, cur)}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell colSpan={3} className="text-right font-sans text-muted-foreground">Subtotal · VAT {String(o.vatRate)}%</TableCell>
+              <TableCell className="text-right">{amount(o.subtotal, cur)} · {amount(o.vat, cur)}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell colSpan={3} className="text-right font-sans font-semibold">Total</TableCell>
+              <TableCell className="text-right font-semibold">{amount(o.total, cur)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+      {((o.assumptions as string[]) ?? []).length > 0 && (
+        <div className="text-sm">
+          <p className="font-medium">Assumes</p>
+          <ul className="list-disc pl-5 text-muted-foreground">{(o.assumptions as string[]).map((a) => <li key={a}>{a}</li>)}</ul>
+        </div>
+      )}
+      {((o.questions as string[]) ?? []).length > 0 && (
+        <div className="text-sm">
+          <p className="font-medium">To confirm with the customer</p>
+          <ul className="list-disc pl-5 text-muted-foreground">{(o.questions as string[]).map((a) => <li key={a}>{a}</li>)}</ul>
+        </div>
+      )}
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <CopyButton text={text} label="Copy quote" /> Ref {String(o.reference)} · valid until {String(o.validUntil)}
+      </div>
+    </div>
+  );
+}
+
+export function CashflowResult({ o }: { o: Out }) {
+  const weeks = (o.weeks as { weekStart: string; moneyIn: number; moneyOut: number; closing: number; notes: string[] }[]) ?? [];
+  const cur = o.currency;
+  const max = Math.max(1, ...weeks.map((w) => Math.abs(w.closing)));
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm font-medium">{String(o.headline ?? "")}</p>
+      <p className="text-sm text-muted-foreground">{String(o.explanation ?? "")}</p>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Week of</TableHead>
+              <TableHead className="text-right">In</TableHead>
+              <TableHead className="text-right">Out</TableHead>
+              <TableHead className="text-right">Balance</TableHead>
+              <TableHead className="w-32" aria-label="Balance bar" />
+            </TableRow>
+          </TableHeader>
+          <TableBody className="font-mono text-[13px]">
+            {weeks.map((w) => (
+              <TableRow key={w.weekStart} className={cn(w.closing < 0 && "bg-destructive-soft/60")}>
+                <TableCell className="font-sans text-xs">
+                  {w.weekStart}
+                  {w.notes.length > 0 && <span className="block text-muted-foreground">{w.notes.join(", ")}</span>}
+                </TableCell>
+                <TableCell className="text-right">{amount(w.moneyIn, cur)}</TableCell>
+                <TableCell className="text-right">{amount(w.moneyOut, cur)}</TableCell>
+                <TableCell className={cn("text-right", w.closing < 0 && "font-semibold text-destructive")}>{amount(w.closing, cur)}</TableCell>
+                <TableCell>
+                  <span className={cn("block h-2 rounded-full", w.closing < 0 ? "bg-destructive" : "bg-primary")} style={{ width: `${Math.max(4, (Math.abs(w.closing) / max) * 100)}%` }} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <ul className="grid list-disc gap-1 pl-5 text-sm">{((o.suggestions as string[]) ?? []).map((x) => <li key={x}>{x}</li>)}</ul>
+      <p className="text-xs text-muted-foreground">
+        Based on: {((o.sources as string[]) ?? []).join("; ") || "the figures you entered"}.
+        {((o.skippedCostLines as string[]) ?? []).length > 0 && ` Couldn't read: ${(o.skippedCostLines as string[]).join(" | ")}`}
+      </p>
+    </div>
+  );
+}
+
+const REQ_TONE: Record<string, string> = { covered: "bg-accent text-accent-foreground", partly: "bg-token-soft text-token", gap: "bg-destructive-soft text-destructive" };
+
+export function ProposalResult({ o }: { o: Out }) {
+  const reqs = (o.requirements as { requirement: string; status: string; answeredIn: string }[]) ?? [];
+  const sections = (o.sections as { heading: string; body: string }[]) ?? [];
+  const questions = (o.questionsForOwner as string[]) ?? [];
+  return (
+    <div className="grid gap-4">
+      <p className="text-sm">
+        <b className="font-medium">{String(o.title)}</b> · {String(o.wordCount)} words{o.wordLimit ? ` of ${o.wordLimit}` : ""}
+      </p>
+      <ul className="grid gap-1.5 text-sm">
+        {reqs.map((r, i) => (
+          <li key={i} className="flex gap-2">
+            <span className={cn("h-fit shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase", REQ_TONE[r.status])}>{r.status}</span>
+            <span className="min-w-0">
+              {r.requirement}
+              {r.answeredIn && <span className="text-muted-foreground"> → {r.answeredIn}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {questions.length > 0 && (
+        <div className="rounded-lg bg-token-soft/60 p-3 text-sm">
+          <p className="font-medium">Needed from you</p>
+          <ul className="list-disc pl-5">{questions.map((q) => <li key={q}>{q}</li>)}</ul>
+        </div>
+      )}
+      <article className="grid gap-3 rounded-xl border bg-background p-4 text-sm">
+        {sections.map((s) => (
+          <section key={s.heading} className="grid gap-1">
+            <h4 className="font-display font-bold">{s.heading}</h4>
+            <p className="whitespace-pre-line text-muted-foreground">{s.body}</p>
+          </section>
+        ))}
+      </article>
+    </div>
+  );
+}
+
+export function ReviewRequestResult({ o }: { o: Out }) {
+  const s = (o.skipped as { refunded: number; noConsent: number; askedRecently: number }) ?? { refunded: 0, noConsent: 0, askedRecently: 0 };
+  const parts = [s.refunded && `${s.refunded} refunded`, s.noConsent && `${s.noConsent} without marketing consent`, s.askedRecently && `${s.askedRecently} asked in the last 90 days`].filter(Boolean);
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm text-muted-foreground">
+        From {String(o.source)}, linking to {String(o.reviewUrl)}.{parts.length > 0 && ` Skipped: ${parts.join(", ")}.`}
+      </p>
+      <EmailsResult emails={(o.emails as Email[]) ?? []} empty="No delivered orders to ask about in this window." />
+    </div>
+  );
+}
+
+const MET_TONE: Record<string, string> = { yes: "text-primary", partly: "text-token", no: "text-destructive", unclear: "text-muted-foreground" };
+
+export function HiringResult({ o }: { o: Out }) {
+  if (o.mode === "advert") {
+    const list = (title: string, items: unknown) =>
+      (items as string[])?.length ? (
+        <div>
+          <p className="font-medium">{title}</p>
+          <ul className="list-disc pl-5 text-muted-foreground">{(items as string[]).map((x) => <li key={x}>{x}</li>)}</ul>
+        </div>
+      ) : null;
+    const text = [o.title, "", o.summary, "", "What you'll do:", ...(o.responsibilities as string[]).map((x) => `• ${x}`), "", "What you need:", ...(o.requirements as string[]).map((x) => `• ${x}`), ...((o.niceToHave as string[]).length ? ["", "Nice to have:", ...(o.niceToHave as string[]).map((x) => `• ${x}`)] : []), ...((o.offer as string[]).length ? ["", "What we offer:", ...(o.offer as string[]).map((x) => `• ${x}`)] : []), "", o.howToApply].join("\n");
+    return (
+      <div className="grid gap-3">
+        <article className="grid gap-3 rounded-xl border bg-background p-4 text-sm">
+          <h4 className="font-display text-lg font-bold">{String(o.title)}</h4>
+          <p>{String(o.summary)}</p>
+          {list("What you'll do", o.responsibilities)}
+          {list("What you need", o.requirements)}
+          {list("Nice to have", o.niceToHave)}
+          {list("What we offer", o.offer)}
+          <p>{String(o.howToApply)}</p>
+        </article>
+        {((o.languageNotes as string[]) ?? []).length > 0 && <p className="text-xs text-muted-foreground">Wording changes: {(o.languageNotes as string[]).join(" · ")}</p>}
+        <CopyButton text={text} label="Copy advert" />
+      </div>
+    );
+  }
+  const criteria = (o.criteria as { criterion: string; mustHave: boolean; met: string; evidence: string }[]) ?? [];
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm">
+        <b className="font-medium">{String(o.candidateLabel)}</b> · {String(o.mustHavesMet)} of {String(o.mustHavesTotal)} must-haves clearly met · {String(o.suggestion)}
+      </p>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Criterion</TableHead>
+              <TableHead>Met</TableHead>
+              <TableHead>Evidence from the CV</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {criteria.map((c, i) => (
+              <TableRow key={i}>
+                <TableCell className="text-sm">
+                  {c.criterion}
+                  <span className="block text-xs text-muted-foreground">{c.mustHave ? "Must-have" : "Nice to have"}</span>
+                </TableCell>
+                <TableCell className={cn("text-xs font-semibold capitalize", MET_TONE[c.met])}>{c.met}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{c.evidence}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="text-sm">
+        <p className="font-medium">Ask at interview</p>
+        <ul className="list-disc pl-5 text-muted-foreground">{((o.interviewQuestions as string[]) ?? []).map((q) => <li key={q}>{q}</li>)}</ul>
+      </div>
+    </div>
+  );
+}
+
+export function DeadlineResult({ o }: { o: Out }) {
+  const items = (o.deadlines as { date: string; what: string; detail: string; daysLeft: number; source: string }[]) ?? [];
+  if (!items.length) return <p className="text-sm text-muted-foreground">Nothing due in the next {String(o.lookAheadDays)} days.</p>;
+  return (
+    <div className="grid gap-2">
+      {!!o.company && <p className="text-sm text-muted-foreground">Company: {String(o.company)}</p>}
+      <ul className="grid gap-1.5">
+        {items.map((d, i) => (
+          <li key={i} className={cn("flex flex-wrap items-baseline gap-x-3 rounded-lg border bg-background px-3 py-2 text-sm", d.daysLeft <= 14 && "border-destructive/40")}>
+            <span className="w-24 shrink-0 font-mono text-[13px]">{d.date}</span>
+            <span className="min-w-0 flex-1">
+              <b className="font-medium">{d.what}</b> <span className="text-muted-foreground">· {d.detail}</span>
+            </span>
+            <span className={cn("text-xs", d.daysLeft <= 14 ? "font-semibold text-destructive" : "text-muted-foreground")}>
+              {d.daysLeft === 0 ? "today" : `${d.daysLeft} days`} · {d.source}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {((o.skippedLines as string[]) ?? []).length > 0 && <p className="text-xs text-muted-foreground">Couldn&apos;t read: {(o.skippedLines as string[]).join(" | ")}</p>}
+    </div>
+  );
+}
+
+export function MeetingResult({ o }: { o: Out }) {
+  const actions = (o.actions as { owner: string; task: string; due: string }[]) ?? [];
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm">{String(o.summary ?? "")}</p>
+      {((o.decisions as string[]) ?? []).length > 0 && (
+        <div className="text-sm">
+          <p className="font-medium">Decided</p>
+          <ul className="list-disc pl-5 text-muted-foreground">{(o.decisions as string[]).map((d) => <li key={d}>{d}</li>)}</ul>
+        </div>
+      )}
+      {actions.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Who</TableHead>
+                <TableHead>Does what</TableHead>
+                <TableHead>By</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {actions.map((a, i) => (
+                <TableRow key={i}>
+                  <TableCell className="text-sm font-medium">{a.owner}</TableCell>
+                  <TableCell className="text-sm">{a.task}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{a.due}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      {((o.openQuestions as string[]) ?? []).length > 0 && <p className="text-sm text-muted-foreground">Still open: {(o.openQuestions as string[]).join(" · ")}</p>}
+      <EmailsResult emails={((o.followUps as { to: string; subject: string; body: string }[]) ?? []).map((f) => ({ label: f.to, subject: f.subject, body: f.body }))} empty="No follow-ups needed." />
+    </div>
+  );
+}

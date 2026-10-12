@@ -24,6 +24,8 @@ const ServerEnvSchema = z.object({
    * because Scheduler, Pub/Sub and Cloud Tasks tokens use it as audience.
    */
   PUBLIC_URL: z.url().optional(),
+  /** Free key from developer.company-information.service.gov.uk, for Deadline Keeper. */
+  COMPANIES_HOUSE_API_KEY: z.string().optional(),
   TASKS_QUEUE: z.string().default("agent-tasks"),
   TASKS_LOCATION: z.string().default("us-central1"),
   TASKS_SERVICE_ACCOUNT: z.string().optional(),

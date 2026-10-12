@@ -11,14 +11,22 @@ import { api, ApiError } from "@/lib/client/api";
 import {
   BookingForm,
   BookkeeperForm,
+  CashflowForm,
+  DeadlineForm,
   DmConciergeForm,
+  HiringForm,
+  InvoiceChaserForm,
   InventoryForm,
   LeadForm,
+  MeetingForm,
   NewsletterForm,
   OnboardingForm,
   OrderDeskForm,
+  ProposalForm,
+  QuoteForm,
   RevenueForm,
   ReviewForm,
+  ReviewRequestForm,
   RotaForm,
   WinbackForm,
 } from "./agent-forms";
@@ -184,6 +192,14 @@ export function TaskRunner({ agent, hire, profile, uid, busy, onStart, onFinish,
       {agent.slug === "lead-followup" && <LeadForm agent={agent} busy={busy} run={run} />}
       {agent.slug === "bookkeeper" && <BookkeeperForm agent={agent} busy={busy} run={run} />}
       {agent.slug === "booking-prep" && <BookingForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "invoice-chaser" && <InvoiceChaserForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "quote-builder" && <QuoteForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "cashflow-forecast" && <CashflowForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "proposal-writer" && <ProposalForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "review-requester" && <ReviewRequestForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "hiring-assistant" && <HiringForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "deadline-keeper" && <DeadlineForm agent={agent} busy={busy} run={run} />}
+      {agent.slug === "meeting-actions" && <MeetingForm agent={agent} busy={busy} run={run} />}
 
       {agent.slug === "echosocial" && (
         <form onSubmit={submitEchoSocial} className="grid gap-3">

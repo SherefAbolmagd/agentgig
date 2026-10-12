@@ -11,7 +11,7 @@ import { useConnections } from "@/lib/client/firestore";
 import type { AgentDoc } from "@/types/firestore";
 import { RunRow } from "./task-runner";
 
-type Run = (input: Record<string, unknown>) => void;
+type Run = (input: Record<string, unknown>, file?: File) => void;
 interface FormProps {
   agent: AgentDoc;
   busy: boolean;
@@ -446,6 +446,374 @@ export function BookingForm({ agent, busy, run }: FormProps) {
       <Choice id="day" label="Meetings" value={day} onChange={setDay} options={[["today", "Today"], ["tomorrow", "Tomorrow"]]} />
       <Note>Only meetings with people outside your company are briefed. Attendees&apos; email addresses aren&apos;t sent to the AI.</Note>
       <RunRow agent={agent} busy={busy} />
+    </form>
+  );
+}
+
+const optional = <span className="font-normal text-muted-foreground">(optional)</span>;
+const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
+
+/** Small attach-a-file control for agents that read documents. */
+function FilePick({ id, label, accept, file, onFile }: { id: string; label: string; accept: string; file: File | null; onFile(f: File | null): void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed px-3 py-2 text-sm">
+      <label htmlFor={id} className="cursor-pointer font-medium text-primary hover:underline">
+        {file ? "Change file" : label}
+      </label>
+      <input id={id} type="file" accept={accept} hidden onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
+      <span className="min-w-0 truncate text-muted-foreground">{file ? `${file.name} · ${Math.ceil(file.size / 1024)} KB` : "No file attached"}</span>
+      {file && (
+        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => onFile(null)}>
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function InvoiceChaserForm({ agent, busy, run }: FormProps) {
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({ minDaysOverdue: Number(f.get("minDaysOverdue")), maxInvoices: Number(f.get("maxInvoices")) });
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="minDaysOverdue">Chase invoices overdue by at least (days)</Label>
+          <Input id="minDaysOverdue" name="minDaysOverdue" type="number" min={0} max={365} defaultValue={1} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="maxInvoices">Most reminders to draft</Label>
+          <Input id="maxInvoices" name="maxInvoices" type="number" min={1} max={25} defaultValue={15} />
+        </div>
+      </div>
+      <Note>Reads unpaid invoices from Xero or QuickBooks. Reminders get firmer the later the invoice is, and no invoice is chased twice in a week.</Note>
+      <RunRow agent={agent} busy={busy} />
+    </form>
+  );
+}
+
+export function QuoteForm({ agent, busy, run }: FormProps) {
+  const [enquiry, setEnquiry] = useState("");
+  const [currency, setCurrency] = useState("GBP");
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({
+          enquiry,
+          currency,
+          vatRate: Number(f.get("vatRate")),
+          validDays: Number(f.get("validDays")),
+          ...(str(f, "customerName") && { customerName: str(f, "customerName") }),
+          ...(str(f, "customerEmail") && { customerEmail: str(f, "customerEmail") }),
+        });
+      }}
+    >
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="enquiry">Customer&apos;s enquiry</Label>
+          <button
+            type="button"
+            className="text-xs font-medium text-primary hover:underline"
+            onClick={() => setEnquiry("Hi, we're a team of 25 moving into a new office in Salford next month. Could you quote for a weekly coffee subscription with oat milk, plus a tasting session for the team in the first week?")}
+          >
+            Use an example
+          </button>
+        </div>
+        <Textarea id="enquiry" value={enquiry} onChange={(e) => setEnquiry(e.target.value)} rows={4} required minLength={10} maxLength={4000} />
+        <p className="text-xs text-muted-foreground">Prices come from your business profile and any price list in Company knowledge.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="customerName">Customer name {optional}</Label>
+          <Input id="customerName" name="customerName" maxLength={80} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="customerEmail">Customer email {optional}</Label>
+          <Input id="customerEmail" name="customerEmail" type="email" placeholder="Only used as the draft's recipient" />
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Choice id="currency" label="Currency" value={currency} onChange={setCurrency} options={[["GBP", "GBP £"], ["EUR", "EUR €"], ["USD", "USD $"]]} />
+        <div className="grid gap-1.5">
+          <Label htmlFor="vatRate">VAT %</Label>
+          <Input id="vatRate" name="vatRate" type="number" min={0} max={30} step="0.5" defaultValue={20} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="validDays">Valid for (days)</Label>
+          <Input id="validDays" name="validDays" type="number" min={1} max={120} defaultValue={30} />
+        </div>
+      </div>
+      <RunRow agent={agent} busy={busy} disabled={enquiry.trim().length < 10} />
+    </form>
+  );
+}
+
+export function CashflowForm({ agent, busy, run }: FormProps) {
+  const [currency, setCurrency] = useState("GBP");
+  const [costs, setCosts] = useState("");
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({ openingBalance: Number(f.get("openingBalance")), currency, regularCosts: costs, ...(str(f, "weeklySales") && { weeklySales: Number(f.get("weeklySales")) }) });
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="openingBalance">Cash in the bank today</Label>
+          <Input id="openingBalance" name="openingBalance" type="number" step="0.01" required />
+        </div>
+        <Choice id="cf-currency" label="Currency" value={currency} onChange={setCurrency} options={[["GBP", "GBP £"], ["EUR", "EUR €"], ["USD", "USD $"]]} />
+        <div className="grid gap-1.5">
+          <Label htmlFor="weeklySales">Other sales per week {optional}</Label>
+          <Input id="weeklySales" name="weeklySales" type="number" min={0} step="0.01" placeholder="Uses Stripe if connected" />
+        </div>
+      </div>
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="regularCosts">Regular costs {optional}</Label>
+          <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setCosts("Rent, 1200, monthly, 1\nWages, 2400, monthly, 28\nVan lease, 85, weekly")}>
+            Use an example
+          </button>
+        </div>
+        <Textarea id="regularCosts" value={costs} onChange={(e) => setCosts(e.target.value)} rows={4} className="font-mono text-xs" placeholder="One per line: name, amount, weekly or monthly, day of month" />
+      </div>
+      <Note>Unpaid invoices and bills come from Xero or QuickBooks, and takings from Stripe, when connected. The sums are done exactly; the AI only explains them.</Note>
+      <RunRow agent={agent} busy={busy} />
+    </form>
+  );
+}
+
+export function ProposalForm({ agent, busy, run }: FormProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [brief, setBrief] = useState("");
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run(
+          {
+            brief,
+            ...(str(f, "buyer") && { buyer: str(f, "buyer") }),
+            ...(str(f, "deadline") && { deadline: str(f, "deadline") }),
+            ...(str(f, "wordLimit") && { wordLimit: Number(f.get("wordLimit")) }),
+          },
+          file ?? undefined,
+        );
+      }}
+    >
+      <FilePick id="proposal-file" label="Attach the tender or brief (PDF or text)" accept="application/pdf,text/plain,text/markdown,.md,.txt" file={file} onFile={setFile} />
+      <div className="grid gap-1.5">
+        <Label htmlFor="brief">{file ? "Anything to add" : "Or paste the brief"}</Label>
+        <Textarea id="brief" value={brief} onChange={(e) => setBrief(e.target.value)} rows={5} maxLength={20000} placeholder="What the buyer wants, their questions and how they'll score answers" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="buyer">Buyer {optional}</Label>
+          <Input id="buyer" name="buyer" maxLength={120} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="deadline">Deadline {optional}</Label>
+          <Input id="deadline" name="deadline" type="date" />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="wordLimit">Word limit {optional}</Label>
+          <Input id="wordLimit" name="wordLimit" type="number" min={200} max={10000} />
+        </div>
+      </div>
+      <RunRow agent={agent} busy={busy} disabled={!file && brief.trim().length < 30} />
+    </form>
+  );
+}
+
+export function ReviewRequestForm({ agent, busy, run }: FormProps) {
+  const [subscribedOnly, setSubscribedOnly] = useState(true);
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({
+          daysAfterDelivery: Number(f.get("daysAfterDelivery")),
+          maxRequests: Number(f.get("maxRequests")),
+          subscribedOnly,
+          ...(str(f, "reviewUrl") && { reviewUrl: str(f, "reviewUrl") }),
+        });
+      }}
+    >
+      <div className="grid gap-1.5">
+        <Label htmlFor="reviewUrl">Review link {optional}</Label>
+        <Input id="reviewUrl" name="reviewUrl" type="url" placeholder="Leave empty to use the link in Company knowledge" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="daysAfterDelivery">Ask this many days after delivery</Label>
+          <Input id="daysAfterDelivery" name="daysAfterDelivery" type="number" min={1} max={30} defaultValue={5} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="maxRequests">Most requests to draft</Label>
+          <Input id="maxRequests" name="maxRequests" type="number" min={1} max={30} defaultValue={15} />
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={subscribedOnly} onCheckedChange={(v) => setSubscribedOnly(v === true)} /> Only customers who agreed to marketing emails
+      </label>
+      <RunRow agent={agent} busy={busy} />
+    </form>
+  );
+}
+
+export function HiringForm({ agent, busy, run }: FormProps) {
+  const [mode, setMode] = useState<"advert" | "screen">("advert");
+  const [file, setFile] = useState<File | null>(null);
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run(
+          {
+            mode,
+            role: str(f, "role"),
+            mustHaves: str(f, "mustHaves"),
+            ...(str(f, "niceToHaves") && { niceToHaves: str(f, "niceToHaves") }),
+            ...(str(f, "details") && { details: str(f, "details") }),
+          },
+          mode === "screen" ? (file ?? undefined) : undefined,
+        );
+      }}
+    >
+      <RadioGroup value={mode} onValueChange={(v) => setMode(v as "advert" | "screen")} className="flex flex-wrap gap-4 text-sm">
+        <label className="flex items-center gap-2">
+          <RadioGroupItem value="advert" /> Write a job advert
+        </label>
+        <label className="flex items-center gap-2">
+          <RadioGroupItem value="screen" /> Check a CV
+        </label>
+      </RadioGroup>
+      <div className="grid gap-1.5">
+        <Label htmlFor="role">Role</Label>
+        <Input id="role" name="role" required minLength={2} maxLength={120} placeholder="e.g. Part-time barista" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="mustHaves">Must-haves</Label>
+          <Textarea id="mustHaves" name="mustHaves" rows={3} required minLength={3} maxLength={2000} placeholder="One per line, e.g. Available weekday mornings" />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="niceToHaves">Nice to have {optional}</Label>
+          <Textarea id="niceToHaves" name="niceToHaves" rows={3} maxLength={2000} />
+        </div>
+      </div>
+      {mode === "advert" ? (
+        <div className="grid gap-1.5">
+          <Label htmlFor="details">Pay, hours, location, start date {optional}</Label>
+          <Input id="details" name="details" maxLength={2000} placeholder="e.g. £12.60/hour, 20 hours a week, Manchester, start in March" />
+        </div>
+      ) : (
+        <FilePick id="cv-file" label="Attach the CV (PDF or text)" accept="application/pdf,text/plain,.txt" file={file} onFile={setFile} />
+      )}
+      {mode === "screen" && <Note>The CV is judged only against your criteria. Age, gender, nationality, photos and career gaps are ignored, and nobody is rejected automatically.</Note>}
+      <RunRow agent={agent} busy={busy} disabled={mode === "screen" && !file} />
+    </form>
+  );
+}
+
+export function DeadlineForm({ agent, busy, run }: FormProps) {
+  const [vat, setVat] = useState("none");
+  const [payroll, setPayroll] = useState(false);
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({
+          vatQuarters: vat,
+          payroll,
+          otherDates: str(f, "otherDates"),
+          lookAheadDays: Number(f.get("lookAheadDays")),
+          ...(str(f, "companyNumber") && { companyNumber: str(f, "companyNumber") }),
+        });
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="companyNumber">Companies House number {optional}</Label>
+          <Input id="companyNumber" name="companyNumber" maxLength={8} placeholder="Uses your profile if empty" />
+        </div>
+        <Choice
+          id="vatQuarters"
+          label="VAT periods end in"
+          value={vat}
+          onChange={setVat}
+          options={[["none", "Not VAT registered"], ["mar-jun-sep-dec", "Mar, Jun, Sep, Dec"], ["jan-apr-jul-oct", "Jan, Apr, Jul, Oct"], ["feb-may-aug-nov", "Feb, May, Aug, Nov"], ["monthly", "Every month"]]}
+        />
+        <div className="grid gap-1.5">
+          <Label htmlFor="lookAheadDays">Look ahead (days)</Label>
+          <Input id="lookAheadDays" name="lookAheadDays" type="number" min={7} max={365} defaultValue={90} />
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={payroll} onCheckedChange={(v) => setPayroll(v === true)} /> I run payroll (PAYE)
+      </label>
+      <div className="grid gap-1.5">
+        <Label htmlFor="otherDates">Your own dates {optional}</Label>
+        <Textarea id="otherDates" name="otherDates" rows={3} maxLength={3000} className="font-mono text-xs" placeholder={"One per line: what, YYYY-MM-DD\nInsurance renewal, 2026-12-01"} />
+      </div>
+      <Note>UK rules. Weekly runs reuse these settings.</Note>
+      <RunRow agent={agent} busy={busy} />
+    </form>
+  );
+}
+
+export function MeetingForm({ agent, busy, run }: FormProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [notes, setNotes] = useState("");
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        run({ notes, ...(str(f, "meetingTitle") && { meetingTitle: str(f, "meetingTitle") }) }, file ?? undefined);
+      }}
+    >
+      <div className="grid gap-1.5">
+        <Label htmlFor="meetingTitle">Meeting {optional}</Label>
+        <Input id="meetingTitle" name="meetingTitle" maxLength={120} placeholder="e.g. Monthly catch-up with Northside Offices" />
+      </div>
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="notes">Notes</Label>
+          <button
+            type="button"
+            className="text-xs font-medium text-primary hover:underline"
+            onClick={() =>
+              setNotes("Call w/ Jo (Northside Offices). They want to add 2nd floor from March, ~15 more people. Agreed: trial oat + almond for 4 wks. Jo to confirm headcount by Fri. Sam to send revised price + tasting dates. Delivery day maybe Tue instead of Mon - Jo checking with facilities.")
+            }
+          >
+            Use an example
+          </button>
+        </div>
+        <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={6} maxLength={30000} placeholder="Rough notes are fine" />
+      </div>
+      <FilePick id="meeting-file" label="Or attach notes or a transcript (PDF or text)" accept="application/pdf,text/plain,text/markdown,.md,.txt" file={file} onFile={setFile} />
+      <RunRow agent={agent} busy={busy} disabled={!file && notes.trim().length < 30} />
     </form>
   );
 }
