@@ -75,8 +75,14 @@ export function defineAgent<I extends Record<string, unknown>, O extends Record<
 
 /** Renders the grounding block shared by every native agent's prompt. */
 export function groundingPrompt(g: Grounding): string {
-  const lines = [`Business: ${g.businessName}`];
   const p = g.profile;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: p?.timeZone ?? "Europe/London" });
+  const weekday = new Date().toLocaleDateString("en-GB", { weekday: "long", timeZone: p?.timeZone ?? "Europe/London" });
+  const lines = [
+    `Today is ${weekday} ${today}. Resolve relative dates ("Friday", "next week") from this.`,
+    "Never invent contact details (email addresses, phone numbers, postal addresses, links). If one is needed and not given, write a placeholder like [ADD: email to apply].",
+    `Business: ${g.businessName}`,
+  ];
   if (p) {
     lines.push(
       `About: ${p.description}`,
