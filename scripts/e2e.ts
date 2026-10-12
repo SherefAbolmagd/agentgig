@@ -187,13 +187,16 @@ async function main() {
       await page.getByLabel("Business name").waitFor();
       const value = await page.getByLabel("Business name").inputValue();
       if (!value.includes("Café Lumen")) throw new Error(`profile not loaded: "${value}"`);
+      const files = page.locator("section", { has: page.getByRole("heading", { name: "Files" }) });
+      // Wait for the live file list to load before uploading, so the new file's arrival is what we observe.
+      await files.getByText(/No files yet|words ·/).first().waitFor({ timeout: 15_000 });
       await page.locator("input[type=file]").setInputFiles({
         name: "faq.txt",
         mimeType: "text/plain",
         buffer: Buffer.from("Q: Do you deliver to Salford?\nA: Yes, Tuesdays and Thursdays. Questions: sam.patel@gmail.com\n"),
       });
-      await page.getByText("faq.txt").first().waitFor({ timeout: 30_000 });
-      await page.getByText("personal data removed").waitFor({ timeout: 15_000 });
+      await page.getByText("faq.txt added.").waitFor({ timeout: 30_000 });
+      await files.getByText("personal data removed").waitFor({ timeout: 30_000 });
       await shot(page, "knowledge");
     });
 
