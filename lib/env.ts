@@ -26,6 +26,12 @@ const ServerEnvSchema = z.object({
   PUBLIC_URL: z.url().optional(),
   /** Free key from developer.company-information.service.gov.uk, for Deadline Keeper. */
   COMPANIES_HOUSE_API_KEY: z.string().optional(),
+  /**
+   * Vertex AI Agent Engine that holds company memory, e.g.
+   * projects/P/locations/us-central1/reasoningEngines/123. Unset: memory lives
+   * in Firestore only (recent facts instead of search by meaning).
+   */
+  MEMORY_ENGINE: z.string().regex(/^projects\/[^/]+\/locations\/[^/]+\/reasoningEngines\/[^/]+$/).optional(),
   TASKS_QUEUE: z.string().default("agent-tasks"),
   TASKS_LOCATION: z.string().default("us-central1"),
   TASKS_SERVICE_ACCOUNT: z.string().optional(),

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { getCallerId } from "@/lib/auth";
+import { getMember } from "@/lib/auth";
+import { requireRole } from "@/lib/org";
 import { GatewayError } from "@/lib/errors";
 import { saveKeyConnection, type KeyTester } from "@/lib/connectors/keys";
 import { testAcuity, testCalendly } from "@/lib/connectors/bookings";
@@ -42,7 +43,9 @@ const TESTERS: Record<KeyProvider, KeyTester> = {
  * Checks the key with a live call to the vendor, then stores it in Secret Manager.
  */
 export const POST = handle<{ params: Promise<{ provider: string }> }>(async (req, { params }) => {
-  const uid = await getCallerId(req);
+  const member = await getMember(req);
+  requireRole(member, "manager", "connect tools");
+  const uid = member.accountId;
   const provider = parseProvider((await params).provider);
   const tester = TESTERS[provider as KeyProvider];
   if (!tester) throw new GatewayError("INVALID_INPUT", `${INTEGRATIONS[provider].name} connects with a sign-in, not a key.`);

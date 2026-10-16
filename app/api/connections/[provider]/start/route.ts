@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { getCallerId } from "@/lib/auth";
+import { getMember } from "@/lib/auth";
+import { requireRole } from "@/lib/org";
 import { GatewayError } from "@/lib/errors";
 import { parseProvider } from "@/lib/connectors/manage";
 import { isConfigured, providerConfig, startConnect } from "@/lib/connectors/oauth";
@@ -17,7 +18,9 @@ const Body = z.object({ returnTo: z.string().max(300).default("/knowledge"), sit
  * OAuth vendors: their consent screen. WooCommerce: the store's own approval page.
  */
 export const POST = handle<{ params: Promise<{ provider: string }> }>(async (req, { params }) => {
-  const uid = await getCallerId(req);
+  const member = await getMember(req);
+  requireRole(member, "manager", "connect tools");
+  const uid = member.accountId;
   const provider = parseProvider((await params).provider);
   const { returnTo, siteUrl } = await readJson(req, Body);
   const kind = INTEGRATIONS[provider].kind;

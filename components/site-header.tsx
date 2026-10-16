@@ -17,20 +17,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api, ApiError } from "@/lib/client/api";
 import { useAuth } from "@/lib/client/auth";
-import { useMe, useOpenApprovals } from "@/lib/client/firestore";
+import { useMe, useMemory, useOpenApprovals } from "@/lib/client/firestore";
 import { useIntegrationStatus } from "@/lib/client/integrations";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/workforce", label: "My workforce" },
+  { href: "/memory", label: "Memory" },
   { href: "/knowledge", label: "Company knowledge" },
+  { href: "/team", label: "Team" },
   { href: "/developers", label: "Developers" },
 ];
 
 export function SiteHeader() {
   const pathname = usePathname();
   const approvals = useOpenApprovals();
+  const memory = useMemory();
+  const pendingFacts = memory.data.filter((m) => m.status === "pending").length;
   return (
     <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5 sm:px-6">
@@ -52,6 +56,11 @@ export function SiteHeader() {
                 {item.href === "/workforce" && approvals.data.length > 0 && (
                   <span className="rounded-full bg-destructive px-1.5 font-mono text-[11px] leading-[18px] text-white">
                     {approvals.data.length}
+                  </span>
+                )}
+                {item.href === "/memory" && pendingFacts > 0 && (
+                  <span className="rounded-full bg-token px-1.5 font-mono text-[11px] leading-[18px] text-white" aria-label={`${pendingFacts} facts waiting`}>
+                    {pendingFacts}
                   </span>
                 )}
               </Link>
@@ -172,6 +181,9 @@ function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/knowledge">Business profile</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/team">Team and roles</Link>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => signOut()}>
           <LogOut /> {demo ? "Leave the demo" : "Sign out"}

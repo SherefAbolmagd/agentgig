@@ -2,7 +2,9 @@ import "server-only";
 import { adminAuth } from "./firebase-admin";
 import { env } from "./env";
 import { GatewayError } from "./errors";
+import { membershipOf } from "./org";
 import type { Caller } from "./users";
+import type { Role } from "@/types/firestore";
 
 /**
  * Identifies the caller from a Firebase ID token (`Authorization: Bearer
@@ -24,6 +26,18 @@ export async function getCaller(req: Request): Promise<Caller> {
   throw new GatewayError("UNAUTHENTICATED", "Sign in to continue.");
 }
 
+/** A signed-in person plus the organization account they work in and their role there. */
+export interface Member extends Caller {
+  accountId: string;
+  role: Role;
+}
+
+export async function getMember(req: Request): Promise<Member> {
+  const caller = await getCaller(req);
+  return { ...caller, ...(await membershipOf(caller.uid)) };
+}
+
+/** The account ID that every per-account document is keyed by. */
 export async function getCallerId(req: Request): Promise<string> {
-  return (await getCaller(req)).uid;
+  return (await getMember(req)).accountId;
 }

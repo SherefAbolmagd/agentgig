@@ -7,6 +7,7 @@ import { env } from "./env";
 import { log as writeLog } from "./log";
 import { db } from "./firebase-admin";
 import { runTask } from "./gateway/pipeline";
+import { rememberTask } from "./memory";
 import { driveDownload, driveListInvoices } from "./connectors/google";
 import { linkedinPost } from "./connectors/linkedin";
 import { isGatewayError } from "./errors";
@@ -32,6 +33,8 @@ export interface Job {
   driveFile?: { id: string; name: string; mimeType: string };
   /** Deliver an already-approved task at its scheduled time (LinkedIn posts). */
   publishTaskId?: string;
+  /** Add what a delivered task learned to company memory. */
+  rememberTaskId?: string;
 }
 
 let tasksClient: CloudTasksClient | undefined;
@@ -77,6 +80,7 @@ export async function enqueue(job: Job, runAt?: Date): Promise<"queued" | "dupli
 export async function runJob(job: Job): Promise<{ status: string }> {
   log("job.start", { key: job.key, agentId: job.agentId, origin: job.origin, file: job.gcsFile?.name ?? job.driveFile?.name });
   if (job.publishTaskId) return publishTask(job.publishTaskId, job.userId);
+  if (job.rememberTaskId) return rememberJob(job.rememberTaskId);
   let files: { name: string; mimeType: string; data: Buffer }[] = [];
   if (job.driveFile) {
     const data = await driveDownload(job.userId, job.driveFile.id);
@@ -115,6 +119,18 @@ export async function runJob(job: Job): Promise<{ status: string }> {
     }
     log("job.error", { key: job.key, error: err instanceof Error ? err.message : String(err) }, "ERROR");
     throw err;
+  }
+}
+
+/** Memory is a bonus: a model or Memory Bank error is logged, not retried forever. */
+async function rememberJob(taskId: string): Promise<{ status: string }> {
+  try {
+    const { saved, pending } = await rememberTask(taskId);
+    log("job.remembered", { taskId, saved, pending });
+    return { status: `remembered ${saved}, pending ${pending}` };
+  } catch (err) {
+    log("job.remember_failed", { taskId, error: err instanceof Error ? err.message : String(err) }, "WARNING");
+    return { status: "not remembered" };
   }
 }
 

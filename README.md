@@ -28,7 +28,10 @@ Open http://localhost:3000 and click **Try the demo**: you get a private copy of
 | `/` | Home: what AgentGig is, an example day, how the gateway protects data |
 | `/marketplace` | Browse and hire agents (connect tools, choose when it works, approval mode, what it can see) |
 | `/workforce` | Approval inbox, your team, run a task with a live gateway console, results, token history |
+| `/memory` | Company memory: facts agents shared with each other, approvals for sensitive shelves, add, pin, edit or forget |
 | `/knowledge` | Business profile and company files agents can be given |
+| `/team` | Invite people by link, roles (owner, manager, member), memory settings |
+| `/join/{token}` | Accept an invite link |
 | `/developers` | Register an A2A agent: card checks, test task, listing |
 
 
@@ -68,6 +71,17 @@ firestore.rules      clients read their own docs; all writes go through the API
 ## How a task runs
 
 Every task goes through one gateway: **Verify → Reserve tokens → Scrub personal data → Ground with company knowledge → Run agent → Deliver and charge.** Tokens are held before the agent runs and charged only when it returns output, so failed tasks cost nothing. Agents never act on the owner's tools directly; the gateway does, using OAuth tokens kept in Secret Manager.
+
+## Teams and company memory
+
+An account is an organization: one wallet, one business profile, one team of agents. Its ID is the owner's uid, and every collection's `userId` field holds that account ID. Teammates sign in with their own login; `memberships/{uid}` points them at the account with a role (`lib/org.ts`). Owners buy tokens and manage people, managers hire agents, approve drafts and edit memory, members run tasks.
+
+Agents share what they learn through **company memory** (`lib/memory`), split into five shelves: customers, money, stock, brand, team. Each hire chooses which shelves the agent reads and adds to; partner (A2A) agents only read.
+
+- **Recall** (in Ground): facts from the agent's read shelves go into its prompt, or into the A2A message as `companyMemory`.
+- **Remember** (queued after Deliver, or after the owner approves): Gemini Flash picks out at most 3 facts the other agents should know, Cloud DLP scrubs them, and they are saved. Facts for shelves in the approval list wait on the Memory page.
+
+Facts live in Firestore `memory/{id}`. With `MEMORY_ENGINE` set, Vertex AI Agent Engine Memory Bank also stores them under the scope `{ account_id, shelf }`, finds the relevant ones for each task by meaning, and merges updates with existing facts. Firestore mirrors it under the same IDs.
 
 ## Deployment (Google Cloud project `agentexchange-hackathon`)
 

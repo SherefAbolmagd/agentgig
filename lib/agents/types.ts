@@ -2,7 +2,7 @@ import type { Part } from "@google/genai";
 import type { z } from "zod";
 import { filePart, textPart, type GenerateJsonResult, type ModelTier } from "@/lib/vertex";
 import type { Delivery } from "@/lib/connectors";
-import type { ApprovalAction, ApprovalDoc, BusinessProfile } from "@/types/firestore";
+import type { ApprovalAction, ApprovalDoc, BusinessProfile, Shelf } from "@/types/firestore";
 
 export interface UploadedFile {
   name: string;
@@ -17,6 +17,8 @@ export interface Grounding {
   styleExamples: { draft: string; edited: string }[];
   /** Company knowledge files the owner shared with this agent. */
   documents: UploadedFile[];
+  /** Facts other agents (or the team) saved to company memory, from shelves this hire reads. */
+  memory: { shelf: Shelf; fact: string }[];
 }
 
 /** Knowledge files as model parts: text files inline, PDFs as documents. */
@@ -97,6 +99,13 @@ export function groundingPrompt(g: Grounding): string {
   }
   if (g.documents.length) {
     lines.push(`Company documents attached below: ${g.documents.map((d) => d.name).join(", ")}. Treat them as facts about the business.`);
+  }
+  if (g.memory.length) {
+    lines.push(
+      "",
+      "Company memory (facts the rest of the team learned recently; treat them as current unless the task says otherwise):",
+      ...g.memory.map((m) => `- [${m.shelf}] ${m.fact}`),
+    );
   }
   if (g.styleExamples.length) {
     lines.push("", "The owner edited earlier drafts like this. Follow their edits' style:");

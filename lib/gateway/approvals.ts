@@ -5,6 +5,7 @@ import { NATIVE_AGENTS } from "@/lib/agents";
 import { partnerAgent } from "@/lib/agents/partner";
 import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
+import { queueRemember } from "./pipeline";
 import { COLLECTIONS, type AgentDoc, type ApprovalDoc, type TaskDoc } from "@/types/firestore";
 
 export const ApprovalDecision = z.object({
@@ -80,5 +81,6 @@ export async function resolveApproval(userId: string, approvalId: string, decisi
   const delivery = await handler.deliver(output, { userId, taskId: approval.taskId });
   await taskRef.update({ status: "delivered", output, delivery, updatedAt: FieldValue.serverTimestamp() });
   await log(`You approved${output.editedByOwner ? " your edited version" : ""} · ${delivery.summary}`);
+  await queueRemember(userId, task.agentId, approval.taskId);
   return { status: "delivered" as const, delivery };
 }

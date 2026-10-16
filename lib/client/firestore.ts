@@ -18,7 +18,10 @@ import {
   type ApprovalDoc,
   type ConnectionDoc,
   type HireDoc,
+  type InviteDoc,
   type KnowledgeSourceDoc,
+  type MembershipDoc,
+  type MemoryDoc,
   type TaskDoc,
   type TokenTransactionDoc,
   type UserDoc,
@@ -72,10 +75,13 @@ export function useLiveQuery<T>(col: string | null, constraints: QueryConstraint
 
 /* ---------- domain hooks ---------- */
 
+/** The organization account's ID: every per-account document is keyed by it. */
 function useUid(): string | null {
-  const { user, accountReady } = useAuth();
-  return accountReady && user ? user.uid : null;
+  const { accountReady, accountId } = useAuth();
+  return accountReady ? accountId : null;
 }
+
+export { useUid as useAccountId };
 
 export function useMe() {
   const uid = useUid();
@@ -135,4 +141,19 @@ export function useKnowledge() {
 export function useConnections() {
   const uid = useUid();
   return useLiveQuery<ConnectionDoc>(uid && COLLECTIONS.connections, [where("userId", "==", uid)], `connections:${uid}`);
+}
+
+export function useMemory() {
+  const uid = useUid();
+  return useLiveQuery<MemoryDoc>(uid && COLLECTIONS.memory, [where("userId", "==", uid), orderBy("updatedAt", "desc"), limitTo(300)], `memory:${uid}`);
+}
+
+export function useMembers() {
+  const uid = useUid();
+  return useLiveQuery<MembershipDoc>(uid && COLLECTIONS.memberships, [where("accountId", "==", uid)], `members:${uid}`);
+}
+
+export function useOpenInvites() {
+  const uid = useUid();
+  return useLiveQuery<InviteDoc>(uid && COLLECTIONS.invites, [where("accountId", "==", uid), where("status", "==", "open")], `invites:${uid}`);
 }

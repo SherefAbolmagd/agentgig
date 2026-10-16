@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { getCallerId } from "@/lib/auth";
+import { getCallerId, getMember } from "@/lib/auth";
+import { requireRole } from "@/lib/org";
 import { GatewayError } from "@/lib/errors";
 import { setSlackChannel } from "@/lib/connectors/manage";
 import { slackListChannels } from "@/lib/connectors/slack";
@@ -24,7 +25,9 @@ export const GET = handle<Ctx>(async (req, ctx) => {
 /** PUT /api/connections/slack/channels — { channel } sets where agents post by default. */
 export const PUT = handle<Ctx>(async (req, ctx) => {
   await requireSlack(ctx);
-  const uid = await getCallerId(req);
+  const member = await getMember(req);
+  requireRole(member, "manager", "change connections");
+  const uid = member.accountId;
   const { channel } = await readJson(req, z.object({ channel: z.string().regex(/^[A-Z0-9]{6,20}$/) }));
   await setSlackChannel(uid, channel);
   return { ok: true };

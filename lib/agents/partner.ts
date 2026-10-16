@@ -40,7 +40,8 @@ export function partnerAgent(agent: AgentDoc, rawInput?: unknown): AnyNativeAgen
             { kind: "text", text: `Skill: ${skill.name}. ${skill.description}` },
             { kind: "data", data: { ...input, ...(context?.data ?? {}), business: businessFor(grounding) } },
           ],
-          { apiKey, timeoutMs: 60_000 },
+          // One A2A context per account, so a partner can tell one business's tasks apart from another's.
+          { apiKey, timeoutMs: 60_000, contextId: `acct-${userId}` },
         );
         return {
           output: resultData(result),
@@ -75,7 +76,8 @@ export function partnerAgent(agent: AgentDoc, rawInput?: unknown): AnyNativeAgen
 }
 
 function businessFor(g: Grounding) {
-  return g.profile ? { businessName: g.businessName, ...g.profile } : { businessName: g.businessName };
+  const memory = g.memory.length ? { companyMemory: g.memory } : {};
+  return g.profile ? { businessName: g.businessName, ...g.profile, ...memory } : { businessName: g.businessName, ...memory };
 }
 
 /* ------------------------------------------------------------------ */

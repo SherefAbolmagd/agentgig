@@ -4,6 +4,7 @@
  */
 export type GatewayErrorCode =
   | "UNAUTHENTICATED"
+  | "FORBIDDEN"
   | "USER_NOT_FOUND"
   | "AGENT_NOT_FOUND"
   | "AGENT_UNAVAILABLE"
@@ -20,6 +21,7 @@ export type GatewayErrorCode =
 
 const HTTP_STATUS: Record<GatewayErrorCode, number> = {
   UNAUTHENTICATED: 401,
+  FORBIDDEN: 403,
   USER_NOT_FOUND: 404,
   AGENT_NOT_FOUND: 404,
   AGENT_UNAVAILABLE: 409,

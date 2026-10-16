@@ -28,7 +28,7 @@ export default function WorkforcePage() {
 
 function Workforce() {
   const params = useSearchParams();
-  const { user } = useAuth();
+  const { accountId } = useAuth();
   const me = useMe();
   const agentsQ = useAgents();
   const hires = useHires();
@@ -139,7 +139,7 @@ function Workforce() {
                 agent={selected.agent}
                 hire={selected.hire}
                 profile={me.data?.businessProfile}
-                uid={user!.uid}
+                uid={accountId!}
                 busy={starting}
                 onStart={(id) => {
                   setTaskId(id);

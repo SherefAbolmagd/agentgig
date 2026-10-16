@@ -47,7 +47,7 @@ async function main() {
   const exists = (await userRef.get()).exists;
 
   if (reset) {
-    for (const c of [COLLECTIONS.tasks, COLLECTIONS.tokenTransactions, COLLECTIONS.approvals, COLLECTIONS.hires, COLLECTIONS.invoiceKeys]) {
+    for (const c of [COLLECTIONS.tasks, COLLECTIONS.tokenTransactions, COLLECTIONS.approvals, COLLECTIONS.hires, COLLECTIONS.invoiceKeys, COLLECTIONS.memory]) {
       const n = await deleteWhere(store, c, DEMO_USER.uid);
       console.log(`  deleted ${n} docs from ${c}`);
     }

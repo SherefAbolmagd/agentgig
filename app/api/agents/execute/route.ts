@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getCallerId } from "@/lib/auth";
+import { getMember } from "@/lib/auth";
 import { GatewayError } from "@/lib/errors";
 import { runTask } from "@/lib/gateway/pipeline";
 import { errorResponse, readTaskBody } from "@/lib/http";
@@ -28,7 +28,8 @@ const AgentId = z.string().regex(/^[a-z0-9-]{2,64}$/);
  */
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getCallerId(req);
+    const member = await getMember(req);
+    const userId = member.accountId;
     await consume("tasksPerUser", userId);
     const body = await readTaskBody(req);
     const agentId = AgentId.safeParse(body.agentId);
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
       rawInput: body.input,
       files: body.files,
       origin: "manual",
+      requestedBy: member.uid,
       idempotencyKey,
     });
     return NextResponse.json(result);

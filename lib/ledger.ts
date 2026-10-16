@@ -34,6 +34,7 @@ export interface ReserveRequest {
   cost: number;
   hireId: string | null;
   origin: TaskDoc["origin"];
+  requestedBy?: string;
   /** Stored on the task; must already be scrubbed or free of personal data. */
   input: Record<string, unknown>;
   /** Pass the same key to make a retried request reuse its first task. */
@@ -95,6 +96,7 @@ export async function reserveTokens(req: ReserveRequest): Promise<{ taskId: stri
       hireId: req.hireId,
       skillId: req.skillId,
       origin: req.origin,
+      ...(req.requestedBy && { requestedBy: req.requestedBy }),
       status: "reserved",
       cost: req.cost,
       spendPeriod: period,

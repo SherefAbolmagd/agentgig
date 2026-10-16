@@ -78,12 +78,14 @@ export async function fetchAgentCard(cardUrl: string): Promise<unknown> {
 export interface SendOptions {
   apiKey?: { header: string; value: string };
   timeoutMs?: number;
+  /** A2A contextId grouping related messages (we use one per account). */
+  contextId?: string;
 }
 
 /** Calls JSON-RPC message/send and returns the Task or Message result. */
 export async function sendMessage(endpoint: string, parts: Part[], opts: SendOptions = {}): Promise<Task | Message> {
   const url = await assertPublicUrl(endpoint);
-  const message: Message = { kind: "message", messageId: randomUUID(), role: "user", parts };
+  const message: Message = { kind: "message", messageId: randomUUID(), role: "user", parts, ...(opts.contextId && { contextId: opts.contextId }) };
   const headers: Record<string, string> = { "content-type": "application/json", accept: "application/json" };
   if (opts.apiKey) headers[opts.apiKey.header] = opts.apiKey.value;
 

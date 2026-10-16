@@ -1,9 +1,9 @@
 import "server-only";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { DEMO_USER } from "@/data/agents";
 import { db } from "./firebase-admin";
 import { hireAgent } from "./hires";
-import { COLLECTIONS, type UserDoc } from "@/types/firestore";
+import { COLLECTIONS, type MemoryDoc, type UserDoc } from "@/types/firestore";
 
 export const WELCOME_TOKENS = 100;
 
@@ -53,6 +53,35 @@ export async function ensureUser(caller: Caller): Promise<{ user: UserDoc; creat
   if (created && demo) {
     await hireAgent(caller.uid, { agentId: "echosocial", triggerId: "manual", approvalMode: "ask", knowledgeAccess: ["profile"] });
     await hireAgent(caller.uid, { agentId: "receipthero", triggerId: "inbox", approvalMode: "auto", knowledgeAccess: ["profile"] });
+    await seedDemoMemory(caller.uid);
   }
   return { user: (await ref.get()).data() as UserDoc, created };
+}
+
+/** A few facts so the sandbox's Memory page and first tasks show sharing at work. */
+async function seedDemoMemory(accountId: string, now = new Date()) {
+  // Next Friday (or the one after, if today is Friday), in words and as an expiry.
+  const friday = new Date(now);
+  friday.setUTCDate(now.getUTCDate() + (((5 - now.getUTCDay() + 7) % 7) || 7));
+  const fridayWords = friday.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" });
+  const agent = (agentId: string, agentName: string) => ({ kind: "agent" as const, agentId, agentName, taskId: "demo" });
+  const facts: Pick<MemoryDoc, "shelf" | "fact" | "source" | "pinned" | "expiresAt">[] = [
+    { shelf: "brand", fact: "This month's offer: a free tasting box for any new office that signs up.", source: { kind: "person", uid: accountId, name: DEMO_USER.displayName }, pinned: true },
+    { shelf: "stock", fact: `Oat milk is short until ${fridayWords}, when Bridgewater Dairy delivers the next batch.`, source: agent("inventory-guardian", "Inventory Guardian"), expiresAt: Timestamp.fromDate(new Date(`${friday.toISOString().slice(0, 10)}T23:59:59Z`)) },
+    { shelf: "brand", fact: "Posts with latte-art photos get about twice the likes of menu photos.", source: agent("echosocial", "EchoSocial") },
+    { shelf: "customers", fact: "Northside Offices usually pays invoices about 3 weeks late.", source: agent("invoice-chaser", "Invoice Chaser") },
+    { shelf: "money", fact: "Lumen Supplies invoices are due 30 days after delivery; pay them on the last Friday of the month.", source: agent("receipthero", "ReceiptHero") },
+    { shelf: "team", fact: "Priya handles customer complaints; Jordan covers Monday deliveries.", source: { kind: "person", uid: accountId, name: DEMO_USER.displayName } },
+  ];
+  const batch = db().batch();
+  for (const f of facts) {
+    batch.set(db().collection(COLLECTIONS.memory).doc(), {
+      userId: accountId,
+      status: "saved",
+      ...f,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  await batch.commit();
 }

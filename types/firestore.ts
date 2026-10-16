@@ -20,6 +20,11 @@ export const COLLECTIONS = {
   styleExamples: "style_examples",
   /** Invoice numbers ReceiptHero has seen, for atomic duplicate detection. Server-only. */
   invoiceKeys: "invoice_keys",
+  /** memberships/{uid}: which organization account a person signs in to. */
+  memberships: "memberships",
+  invites: "invites",
+  /** Company memory: facts agents (and people) share across the organization. */
+  memory: "memory",
 } as const;
 
 export type ToolProvider =
@@ -55,7 +60,12 @@ export type ToolProvider =
   | "quickbooks"
   | "bank_feed";
 
-/* ---------- users/{uid} ---------- */
+/* ---------- users/{accountId} ---------- */
+/*
+ * An account is the organization: one wallet, one business profile, one team
+ * of agents. Its ID is its owner's uid, and every other collection's `userId`
+ * field holds this account ID, whoever on the team did the work.
+ */
 
 export interface BusinessProfile {
   description: string; // what the business does, in the owner's words
@@ -84,6 +94,71 @@ export interface UserDoc {
   tokensHeld: number;
   tokensSpent: number;
   businessProfile?: BusinessProfile;
+  /** Company memory settings; missing means on, with approval for Customers and Money. */
+  memory?: MemorySettings;
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+/* ---------- memberships/{uid} ---------- */
+
+export type Role = "owner" | "manager" | "member";
+
+/** Present only for people who joined someone else's account. Owners have none. */
+export interface MembershipDoc {
+  accountId: string;
+  role: Exclude<Role, "owner">;
+  email: string;
+  displayName: string;
+  invitedBy: string;
+  joinedAt: Ts;
+}
+
+/* ---------- invites/{token} ---------- */
+
+/** The document ID is the secret in the invite link. */
+export interface InviteDoc {
+  accountId: string;
+  businessName: string;
+  role: Exclude<Role, "owner">;
+  /** Optional: who it's meant for, shown to the owner. Not enforced. */
+  label: string;
+  invitedBy: string;
+  status: "open" | "used" | "revoked";
+  usedBy?: string;
+  expiresAt: Ts;
+  createdAt: Ts;
+}
+
+/* ---------- memory/{id} ---------- */
+
+export const SHELVES = ["customers", "money", "stock", "brand", "team"] as const;
+export type Shelf = (typeof SHELVES)[number];
+
+export interface MemorySettings {
+  enabled: boolean;
+  /** Facts for these shelves wait for an owner or manager before agents can use them. */
+  approveShelves: Shelf[];
+}
+
+/**
+ * One shared fact. With Memory Bank configured the ID is the Memory Bank
+ * memory ID, so Firestore mirrors it for the Memory page; pending facts get a
+ * random ID until approved.
+ */
+export interface MemoryDoc {
+  userId: string;
+  shelf: Shelf;
+  fact: string;
+  status: "pending" | "saved";
+  source: { kind: "agent"; agentId: string; agentName: string; taskId: string } | { kind: "person"; uid: string; name: string };
+  pinned?: boolean;
+  /** Agents that have been given this fact, most recent last. */
+  usedBy?: string[];
+  /** Memory Bank resource name, when Memory Bank stores it. */
+  memoryName?: string;
+  /** When agents stop seeing it; a Firestore TTL policy deletes it later. */
+  expiresAt?: Ts | null;
   createdAt: Ts;
   updatedAt: Ts;
 }
@@ -143,6 +218,8 @@ export interface HireDoc {
   knowledgeAccess: string[];
   /** Max tokens this agent may spend per calendar month; null = no cap. */
   monthlyCapTokens: number | null;
+  /** Company memory shelves it reads before working and adds to afterwards. Missing = the agent's defaults. */
+  memory?: { read: Shelf[]; write: Shelf[] };
   /** Tokens held or charged this month, for the cap. Written only by lib/ledger.ts. */
   spend?: { period: string; tokens: number };
   active: boolean;
@@ -178,7 +255,7 @@ export type TaskStatus =
   | "failed"
   | "discarded";
 
-export type GatewayStep = "verify" | "reserve" | "scrub" | "ground" | "run" | "deliver";
+export type GatewayStep = "verify" | "reserve" | "scrub" | "ground" | "run" | "deliver" | "remember";
 
 export interface TaskStepLog {
   step: GatewayStep;
@@ -198,6 +275,8 @@ export interface TaskDoc {
   hireId: string | null;
   skillId: string;
   origin: "manual" | "schedule" | "event" | "a2a";
+  /** The team member who started a manual task. */
+  requestedBy?: string;
   status: TaskStatus;
   cost: number;
   /** Set once by lib/ledger.ts settleTask; makes settling idempotent. */

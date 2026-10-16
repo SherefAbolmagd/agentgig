@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { getCallerId } from "@/lib/auth";
+import { getMember } from "@/lib/auth";
+import { requireRole } from "@/lib/org";
 import { db } from "@/lib/firebase-admin";
 import { handle, readJson } from "@/lib/http";
 import { BusinessProfileSchema } from "@/lib/profile";
@@ -10,7 +11,9 @@ export const dynamic = "force-dynamic";
 
 /** PUT /api/profile — saves the business profile every agent can be given. */
 export const PUT = handle(async (req) => {
-  const uid = await getCallerId(req);
+  const member = await getMember(req);
+  requireRole(member, "manager", "edit the business profile");
+  const uid = member.accountId;
   const { businessName, ...profile } = await readJson(req, BusinessProfileSchema);
   await db()
     .collection(COLLECTIONS.users)

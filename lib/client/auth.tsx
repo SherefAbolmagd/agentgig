@@ -13,6 +13,7 @@ import {
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { clientAuth } from "@/lib/firebase-client";
 import { api } from "./api";
+import type { Role } from "@/types/firestore";
 
 interface AuthContextValue {
   user: User | null;
@@ -22,6 +23,11 @@ interface AuthContextValue {
   accountReady: boolean;
   /** Why the account couldn't be set up (e.g. rate limited), if it failed. */
   accountError: string | null;
+  /** The organization account this person works in (their own uid unless they joined a team). */
+  accountId: string | null;
+  role: Role | null;
+  /** Re-reads which account the person belongs to, after joining or leaving a team. */
+  refreshAccount(): Promise<void>;
   signInDemo(): Promise<void>;
   signInGoogle(): Promise<void>;
   signInEmail(email: string, password: string): Promise<void>;
@@ -34,8 +40,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
-  const [accountUid, setAccountUid] = useState<string | null>(null);
+  const [account, setAccount] = useState<{ uid: string; accountId: string; role: Role } | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+
+  async function loadAccount(u: User) {
+    try {
+      const me = await api<{ accountId: string; role: Role }>("/api/me");
+      setAccount({ uid: u.uid, accountId: me.accountId, role: me.role });
+    } catch (err) {
+      setAccountError(err instanceof Error ? err.message : "We couldn't set up your account.");
+    }
+  }
 
   useEffect(
     () =>
@@ -43,13 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(u);
         setReady(true);
         setAccountError(null);
-        if (!u) return setAccountUid(null);
-        try {
-          await api("/api/me");
-          setAccountUid(u.uid);
-        } catch (err) {
-          setAccountError(err instanceof Error ? err.message : "We couldn't set up your account.");
-        }
+        if (!u) return setAccount(null);
+        await loadAccount(u);
       }),
     [],
   );
@@ -58,8 +68,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       ready,
-      accountReady: !!user && accountUid === user.uid,
+      accountReady: !!user && account?.uid === user.uid,
       accountError,
+      accountId: user && account?.uid === user.uid ? account.accountId : null,
+      role: user && account?.uid === user.uid ? account.role : null,
+      async refreshAccount() {
+        if (clientAuth.currentUser) await loadAccount(clientAuth.currentUser);
+      },
       async signInDemo() {
         await signInAnonymously(clientAuth);
       },
@@ -78,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await firebaseSignOut(clientAuth);
       },
     }),
-    [user, ready, accountUid, accountError],
+    [user, ready, account, accountError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

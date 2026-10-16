@@ -17,7 +17,9 @@ const DATA_PROVIDERS: Provider[] = ["shopify", "woocommerce", "stripe", "square"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { api, ApiError } from "@/lib/client/api";
 import { useKnowledge, useMe, type WithId } from "@/lib/client/firestore";
-import type { AgentDoc, HireDoc } from "@/types/firestore";
+import { ShelfBadge } from "@/components/memory/shelf-badge";
+import { defaultShelves, DEFAULT_MEMORY_SETTINGS, SHELF_INFO } from "@/lib/shelves";
+import { SHELVES, type AgentDoc, type HireDoc, type Shelf } from "@/types/firestore";
 
 interface Props {
   agent: WithId<AgentDoc> | null;
@@ -34,6 +36,8 @@ export function HireDialog({ agent, existing, onClose }: Props) {
   const [access, setAccess] = useState<Set<string>>(new Set(["profile"]));
   const [saving, setSaving] = useState(false);
   const [cap, setCap] = useState("");
+  const [read, setRead] = useState<Set<Shelf>>(new Set());
+  const [write, setWrite] = useState<Set<Shelf>>(new Set());
 
   useEffect(() => {
     if (!agent) return;
@@ -41,6 +45,9 @@ export function HireDialog({ agent, existing, onClose }: Props) {
     setApprovalMode(existing?.approvalMode ?? (agent.category === "Finance" ? "auto" : "ask"));
     setAccess(new Set(existing?.knowledgeAccess ?? ["profile"]));
     setCap(existing?.monthlyCapTokens ? String(existing.monthlyCapTokens) : "");
+    const shelves = existing?.memory ?? defaultShelves(agent);
+    setRead(new Set(shelves.read));
+    setWrite(new Set(shelves.write));
   }, [agent, existing]);
 
   if (!agent) return null;
@@ -48,12 +55,14 @@ export function HireDialog({ agent, existing, onClose }: Props) {
   const hasProfile = !!me.data?.businessProfile;
   const dataProviders = providers.filter((p) => DATA_PROVIDERS.includes(p));
   const needsData = dataProviders.length ? dataProviders.map((p) => PROVIDER_INFO[p].name).join(" or ") : null;
+  const memory = { ...DEFAULT_MEMORY_SETTINGS, ...me.data?.memory };
+  const partner = agent.source === "a2a";
 
   async function save() {
     if (!agent) return;
     setSaving(true);
     try {
-      await api("/api/hires", { json: { agentId: agent.slug, triggerId, approvalMode, knowledgeAccess: [...access], monthlyCapTokens: cap ? Number(cap) : null } });
+      await api("/api/hires", { json: { agentId: agent.slug, triggerId, approvalMode, knowledgeAccess: [...access], monthlyCapTokens: cap ? Number(cap) : null, memory: { read: [...read], write: partner ? [] : [...write] } } });
       toast.success(existing ? `${agent.name}'s settings are saved.` : `${agent.name} joined your team.`, {
         action: { label: "Give it a task", onClick: () => router.push(`/workforce?agent=${agent.slug}`) },
       });
@@ -131,7 +140,37 @@ export function HireDialog({ agent, existing, onClose }: Props) {
             ))}
           </Step>
 
-          <Step n={5} title="Monthly spending limit">
+          <Step n={5} title="Company memory">
+            <p className="text-sm text-muted-foreground">
+              {memory.enabled
+                ? `What ${agent.name} looks up from your other agents before it works, and what it may share back with them.`
+                : "Company memory is switched off for your team. You can still choose shelves for when it's back on."}
+            </p>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 gap-y-1.5 rounded-lg border px-3 py-2.5 text-sm">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Shelf</span>
+              <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Reads</span>
+              <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Adds</span>
+              {SHELVES.map((s) => (
+                <ShelfRow
+                  key={s}
+                  shelf={s}
+                  read={read.has(s)}
+                  write={!partner && write.has(s)}
+                  canWrite={!partner}
+                  approval={memory.approveShelves.includes(s)}
+                  onRead={(on) => setRead((x) => flip(x, s, on))}
+                  onWrite={(on) => setWrite((x) => flip(x, s, on))}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {partner
+                ? `${agent.name} is run by another company, so it can read but never adds to your memory.`
+                : "Personal details are removed before anything is saved. You can see and delete every fact on the Memory page."}
+            </p>
+          </Step>
+
+          <Step n={6} title="Monthly spending limit">
             <div className="flex items-center gap-2">
               <Input
                 id="cap"
@@ -169,6 +208,27 @@ export function HireDialog({ agent, existing, onClose }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function flip<T>(set: Set<T>, item: T, on: boolean): Set<T> {
+  const next = new Set(set);
+  if (on) next.add(item);
+  else next.delete(item);
+  return next;
+}
+
+function ShelfRow(props: { shelf: Shelf; read: boolean; write: boolean; canWrite: boolean; approval: boolean; onRead(on: boolean): void; onWrite(on: boolean): void }) {
+  const { shelf, read, write, canWrite, approval, onRead, onWrite } = props;
+  return (
+    <>
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 py-1">
+        <ShelfBadge shelf={shelf} />
+        <span className="text-xs text-muted-foreground">{write && approval ? "Asks you before adding" : SHELF_INFO[shelf].hint}</span>
+      </span>
+      <Checkbox id={`read-${shelf}`} aria-label={`Reads ${SHELF_INFO[shelf].label}`} checked={read} onCheckedChange={(v) => onRead(v === true)} />
+      <Checkbox id={`write-${shelf}`} aria-label={`Adds to ${SHELF_INFO[shelf].label}`} checked={write} disabled={!canWrite} onCheckedChange={(v) => onWrite(v === true)} />
+    </>
   );
 }
 

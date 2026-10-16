@@ -12,6 +12,7 @@ const STEPS: { key: GatewayStep; label: string }[] = [
   { key: "ground", label: "knowledge" },
   { key: "run", label: "agent" },
   { key: "deliver", label: "deliver" },
+  { key: "remember", label: "memory" },
 ];
 
 interface Props {

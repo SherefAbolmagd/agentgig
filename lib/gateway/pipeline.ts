@@ -7,6 +7,8 @@ import { mergeFindings, scrubFile, scrubText } from "@/lib/dlp";
 import { GatewayError, isGatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
 import { reserveTokens, settleTask } from "@/lib/ledger";
+import { log as logLine } from "@/lib/log";
+import { enqueue } from "@/lib/triggers";
 import {
   COLLECTIONS,
   type AgentDoc,
@@ -21,8 +23,10 @@ import { buildGrounding, describeGrounding } from "./ground";
 
 /**
  * The gateway: every task, from the dashboard or a trigger, runs through
- *   1 Verify  2 Reserve  3 Scrub  4 Ground  5 Run  6 Deliver
+ *   1 Verify  2 Reserve  3 Scrub  4 Ground (+ recall memory)  5 Run  6 Deliver
  * and logs each step on tasks/{id}.steps so the dashboard can show progress.
+ * After delivery a queued job adds what was learned to company memory
+ * (lib/memory rememberTask), so the next agent knows it.
  */
 
 export interface RunTaskRequest {
@@ -31,6 +35,8 @@ export interface RunTaskRequest {
   rawInput: unknown;
   files: UploadedFile[];
   origin: TaskDoc["origin"];
+  /** Team member who started a manual task. */
+  requestedBy?: string;
   idempotencyKey?: string;
 }
 
@@ -61,6 +67,7 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
       cost: agent.tokensPerTask,
       hireId: `${req.userId}_${agent.slug}`,
       origin: req.origin,
+      requestedBy: req.requestedBy,
       input: {},
       idempotencyKey: req.idempotencyKey,
     }));
@@ -97,7 +104,7 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
     await log("scrub", "ok", [summariseFindings(dlpFindings), ...notes].join(" "));
 
     /* 4 · Ground */
-    const grounding = await buildGrounding(user, hire);
+    const grounding = await buildGrounding(user, hire, agent, `${agent.name}: ${handler.skillId}. ${JSON.stringify(cleanInput).slice(0, 1000)}`);
     await log("ground", "ok", describeGrounding(grounding));
 
     /* 5 · Run */
@@ -139,7 +146,15 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
   const delivery = await handler.deliver(output, { userId: req.userId, taskId });
   await taskRef.update({ status: "delivered", output, delivery, finishedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   await log("deliver", "ok", `Charged ${agent.tokensPerTask} tokens · ${delivery.summary}`);
+  await queueRemember(req.userId, agent.slug, taskId);
   return { taskId, status: "delivered", output, dlpFindings, tokensCharged: agent.tokensPerTask, balance, delivery };
+}
+
+/** Company memory is updated after delivery, off the request path. A failure there never fails the task. */
+export async function queueRemember(userId: string, agentId: string, taskId: string) {
+  await enqueue({ key: `remember-${taskId}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100), userId, agentId, input: {}, origin: "event", rememberTaskId: taskId }).catch(
+    (err) => logLine("WARNING", "memory.queue_failed", { component: "gateway", taskId, error: String(err) }),
+  );
 }
 
 async function verify(req: RunTaskRequest) {

@@ -5,6 +5,8 @@ import { adminAuth, db } from "./firebase-admin";
 import { env } from "./env";
 import { log } from "./log";
 import { settleTask } from "./ledger";
+import { forgetAccountMemory } from "./memory";
+import { deleteMemberships } from "./org";
 import { COLLECTIONS, type TaskDoc } from "@/types/firestore";
 
 /** Collections holding per-user documents (all keyed by a `userId` field). */
@@ -17,16 +19,20 @@ const USER_COLLECTIONS = [
   COLLECTIONS.knowledgeSources,
   COLLECTIONS.styleExamples,
   COLLECTIONS.invoiceKeys,
+  COLLECTIONS.memory,
 ] as const;
 
 /**
  * Permanently deletes a user's account: every Firestore document, uploaded
- * files, and the sign-in itself. Agents they registered as a developer are
+ * files, shared memory, teammates' memberships (they go back to their own
+ * accounts), and the sign-in itself. Agents they registered as a developer are
  * suspended rather than deleted, so other owners' history stays readable.
  */
 export async function deleteAccount(uid: string): Promise<{ documents: number; files: number }> {
   const store = db();
-  let documents = 0;
+  // Memory Bank copies first, while the memory docs still list them.
+  await forgetAccountMemory(uid);
+  let documents = await deleteMemberships(uid);
   for (const name of USER_COLLECTIONS) {
     for (;;) {
       const snap = await store.collection(name).where("userId", "==", uid).limit(400).get();

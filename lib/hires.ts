@@ -3,7 +3,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { db } from "./firebase-admin";
 import { GatewayError } from "./errors";
-import { COLLECTIONS, type AgentDoc, type HireDoc } from "@/types/firestore";
+import { COLLECTIONS, SHELVES, type AgentDoc, type HireDoc } from "@/types/firestore";
+import { defaultShelves } from "./shelves";
 import { providerForTool } from "./connectors/manage";
 
 export const HireRequest = z.object({
@@ -14,6 +15,8 @@ export const HireRequest = z.object({
   knowledgeAccess: z.array(z.string().min(1)).max(50).default(["profile"]),
   /** Monthly token limit for this agent; null removes it, omitted keeps the current one. */
   monthlyCapTokens: z.number().int().min(1).max(100_000).nullable().optional(),
+  /** Company memory shelves; omitted keeps the current choice (or the agent's defaults). */
+  memory: z.object({ read: z.array(z.enum(SHELVES)).max(5), write: z.array(z.enum(SHELVES)).max(5) }).optional(),
 });
 export type HireRequest = z.infer<typeof HireRequest>;
 
@@ -39,6 +42,8 @@ export async function hireAgent(userId: string, req: HireRequest): Promise<HireD
 
   return store.runTransaction(async (tx) => {
     const existing = await tx.get(hireRef);
+    const previous = existing.data() as HireDoc | undefined;
+    const shelves = req.memory ?? previous?.memory ?? defaultShelves(agent);
     const connectionIds = [...new Set(agent.tools.map(providerForTool).filter(Boolean))].map((p) => `${userId}_${p}`);
     const hire = {
       userId,
@@ -47,7 +52,9 @@ export async function hireAgent(userId: string, req: HireRequest): Promise<HireD
       approvalMode: req.approvalMode,
       connectionIds,
       knowledgeAccess,
-      monthlyCapTokens: req.monthlyCapTokens !== undefined ? req.monthlyCapTokens : ((existing.data() as HireDoc | undefined)?.monthlyCapTokens ?? null),
+      monthlyCapTokens: req.monthlyCapTokens !== undefined ? req.monthlyCapTokens : (previous?.monthlyCapTokens ?? null),
+      // Partner agents never add to company memory.
+      memory: { read: [...new Set(shelves.read)], write: agent.source === "a2a" ? [] : [...new Set(shelves.write)] },
       active: true,
       updatedAt: FieldValue.serverTimestamp(),
       ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
