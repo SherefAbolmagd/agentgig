@@ -1,9 +1,10 @@
 /**
- * Narration for the demo video with Google Cloud Text-to-Speech (Chirp 3 HD).
+ * Narration for the demo video with Google Cloud Text-to-Speech (Chirp 3 HD),
+ * as 48 kHz WAV clips; prints each clip's length for timing the edit.
  *
  *   npx tsx scripts/video-tts.ts voices <out-dir>              a sample of each candidate voice
  *   npx tsx scripts/video-tts.ts lines <voice> <lines.json> <out-dir>
- *                                                             one MP3 per line: {"01": "text", ...}
+ *                                                             one WAV per line: {"01": "text", ...}
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -32,9 +33,11 @@ async function speak(voice: string, text: string, file: string) {
   const { audioContent } = await call<{ audioContent: string }>("text:synthesize", {
     input: { text },
     voice: { languageCode, name: voice },
-    audioConfig: { audioEncoding: "MP3", sampleRateHertz: 48000 },
+    audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 48000 },
   });
-  writeFileSync(file, Buffer.from(audioContent, "base64"));
+  const wav = Buffer.from(audioContent, "base64");
+  writeFileSync(file, wav);
+  return (wav.length - 44) / (48000 * 2);
 }
 
 async function main() {
@@ -46,15 +49,15 @@ async function main() {
     console.log(chirp.map((v) => `${v.name} (${v.ssmlGender.toLowerCase()})`).join("\n"));
     const picks = ["Charon", "Kore", "Puck", "Aoede", "Fenrir", "Leda"].map((n) => chirp.find((v) => v.name.endsWith(n))).filter(Boolean);
     for (const v of picks) {
-      await speak(v!.name, SAMPLE, `${a}/${v!.name}.mp3`);
-      console.log(`✓ ${a}/${v!.name}.mp3`);
+      await speak(v!.name, SAMPLE, `${a}/${v!.name}.wav`);
+      console.log(`✓ ${a}/${v!.name}.wav`);
     }
   } else if (mode === "lines") {
     mkdirSync(c, { recursive: true });
     const lines = JSON.parse(readFileSync(b, "utf8")) as Record<string, string>;
     for (const [key, text] of Object.entries(lines)) {
-      await speak(a, text, `${c}/${key}.mp3`);
-      console.log(`✓ ${c}/${key}.mp3`);
+      const seconds = await speak(a, text, `${c}/${key}.wav`);
+      console.log(`${key}  ${seconds.toFixed(1)} s`);
     }
   } else {
     console.log("Usage: video-tts.ts voices <out-dir> | lines <voice> <lines.json> <out-dir>");
