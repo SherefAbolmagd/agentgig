@@ -131,8 +131,16 @@ class Person {
     await target.waitFor({ state: "visible", timeout: 30_000 });
     await this.point(target);
     await this.pause(220);
-    await this.page.mouse.down();
-    await this.page.mouse.up();
+    // The page may have moved while the pointer glided (a new chat message), so
+    // the click itself goes to the element where it is now, not where it was.
+    const box = await target.boundingBox().catch(() => null);
+    if (box) [this.x, this.y] = [box.x + box.width / 2, box.y + box.height / 2];
+    try {
+      await target.click({ delay: 60, timeout: 3000 });
+    } catch {
+      // Covered by another element (a label over a radio): click where it is.
+      await this.page.mouse.click(this.x, this.y, { delay: 60 });
+    }
     await this.pause(after);
   }
   async type(target: Locator, text: string, delay = 38) {
@@ -170,21 +178,59 @@ class Telegram {
   input() {
     return this.page.locator("div.input-message-input[contenteditable=true]:not(.input-field-input-fake)").first();
   }
+  /** Incoming messages (Ada and the agents), never Sam's own. */
+  incoming(text: string | RegExp) {
+    return this.page.locator(".bubble.is-in", { hasText: text });
+  }
   async send(text: string, { paste = false } = {}) {
+    await this.assertPrivate();
     if (paste) await this.me.paste(this.input(), text);
     else await this.me.type(this.input(), text);
     await this.me.pause(300);
     await this.page.keyboard.press("Enter");
   }
-  /** Waits for a message containing `text` and returns its bubble. */
-  async waitFor(text: string | RegExp, timeout = 180_000) {
-    const bubble = this.page.locator(".bubble", { hasText: text }).last();
-    await bubble.waitFor({ timeout });
+  /** Sends, then waits for a new incoming message containing `reply`, and returns it. */
+  async ask(text: string, reply: string | RegExp, opts: { paste?: boolean } = {}) {
+    const before = await this.incoming(reply).count();
+    await this.send(text, opts);
+    return this.waitFor(reply, before);
+  }
+  /** Waits until more than `before` incoming messages contain `text`; returns the newest. */
+  async waitFor(text: string | RegExp, before = 0, timeout = 180_000) {
+    const all = this.incoming(text);
+    const deadline = Date.now() + timeout;
+    while ((await all.count()) <= before) {
+      if (Date.now() > deadline) throw new Error(`No new Telegram message matching ${text}`);
+      await this.page.waitForTimeout(400);
+    }
+    const bubble = all.last();
     await bubble.scrollIntoViewIfNeeded().catch(() => undefined);
+    // Let Ada's follow-up land too, so the next message doesn't cut in.
+    await this.page.waitForTimeout(2500);
     return bubble;
   }
   async tap(bubble: Locator, button: string) {
-    await this.me.click(bubble.locator(".reply-markup-button", { hasText: button }).first(), 800);
+    // The buttons sit just under the bubble, in the same message group.
+    const group = bubble.locator("xpath=ancestor-or-self::*[contains(@class,'bubble')][1]");
+    await this.me.click(group.locator(".reply-markup-button", { hasText: button }).first(), 800);
+  }
+  /** Opens the bot chat with an empty history, and makes sure no other chat is on screen. */
+  async prepare() {
+    await this.page.goto("https://web.telegram.org/k/#@AgentGigBot");
+    await this.input().waitFor({ timeout: 60_000 });
+    await this.page.waitForTimeout(4000);
+    if (await this.page.locator(".bubble").count()) {
+      await this.page.locator(".topbar button.btn-menu-toggle").filter({ visible: true }).first().click();
+      await this.page.locator(".btn-menu-item", { hasText: "Clear history" }).filter({ visible: true }).click();
+      await this.page.locator(".popup-button", { hasText: /Delete|Clear/i }).last().click();
+      await this.page.waitForTimeout(2500);
+    }
+    await this.assertPrivate();
+  }
+  /** Stops the take if the chat list (other people's chats) could be on screen. */
+  async assertPrivate() {
+    const left = await this.page.locator("#column-left").boundingBox();
+    if (left && left.x + left.width > 1) throw new Error("Telegram's chat list is visible; refusing to record it.");
   }
 }
 
@@ -211,8 +257,14 @@ async function main() {
     const p = tgCtx.pages()[0] ?? (await tgCtx.newPage());
     tg = new Telegram(new Person(p));
     await tg.me.setup();
-    await p.goto("https://web.telegram.org/k/#@AgentGigBot");
-    await tg.input().waitFor({ timeout: 60_000 });
+    await tg.prepare();
+    if (process.env.TG_PREP_ONLY === "1") {
+      await p.screenshot({ path: `${OUT}/telegram-prepared.png` });
+      console.log(`✓ Telegram prepared: ${OUT}/telegram-prepared.png`);
+      await tgCtx.close();
+      await browser.close();
+      return;
+    }
   }
 
   // Signed in before the camera rolls.
@@ -303,12 +355,15 @@ async function main() {
     /* 6 · Approve (Telegram, or the website's approval inbox) */
     if (tg) {
       const over = await tg.waitFor("overcharged by");
+      const clean = await tg.waitFor("no problems");
       mark("invoice draft in telegram");
+      await tg.me.point(over);
       await tg.me.pause(1500);
       await tg.tap(over, "Approve");
-      const clean = await tg.waitFor("no problems");
-      await tg.tap(clean, "Approve");
       await tg.waitFor(/drafted a correction email/);
+      mark("overcharged invoice approved in telegram");
+      await tg.tap(clean, "Approve");
+      await tg.waitFor(/Logged to your spend sheet/, 1);
       mark("invoice approved in telegram");
     } else {
       await web.page.getByText(/overcharged by/).first().waitFor({ timeout: 180_000 });
@@ -327,31 +382,28 @@ async function main() {
     if (tg) {
       /* 7 · VAT */
       mark("scene 7 vat");
-      await tg.send("Can you get the VAT summary for October ready?");
-      await tg.waitFor(/VAT to reclaim/);
+      await tg.ask("Can you get the VAT summary for October ready?", /VAT to reclaim/);
       mark("vat posted");
       await tg.me.pause(2500);
 
       /* 8 · Quote + remember */
       mark("scene 8 quote");
-      await tg.send(`Can you quote this? ${readFileSync(`${FIX}/catering-enquiry.txt`, "utf8")}`, { paste: true });
-      const quote = await tg.waitFor(/Quote Q-.* ready/);
+      const quote = await tg.ask(`Can you quote this? ${readFileSync(`${FIX}/catering-enquiry.txt`, "utf8")}`, /Quote Q-.* ready/, { paste: true });
       mark("quote posted");
       await tg.me.point(quote);
       await tg.me.pause(2500);
       await tg.tap(quote, "Approve");
       await tg.waitFor(/draft in Gmail/);
       mark("quote approved");
-      await tg.send("Remember that Brightwell Studio has a few vegans, always include vegan pastries for them.");
-      await tg.waitFor(/Brightwell/);
+      await tg.ask("Remember that Brightwell Studio has a few vegans, always include vegan pastries for them.", /saved|noted|remember/i);
       mark("remembered");
       await tg.me.pause(1500);
 
       /* 9 · Review */
       mark("scene 9 review");
-      await tg.send(`We got this review, can you draft a reply? ${readFileSync(`${FIX}/google-review.txt`, "utf8")}`, { paste: true });
-      const review = await tg.waitFor(/review needs attention|Reply ready/);
+      const review = await tg.ask(`We got this review, can you draft a reply? ${readFileSync(`${FIX}/google-review.txt`, "utf8")}`, /review needs attention|Reply ready/, { paste: true });
       mark("review draft posted");
+      await tg.me.point(review);
       await tg.me.pause(3000);
       await tg.tap(review, "Edit");
       await tg.waitFor(/Send me the new text/);
@@ -379,8 +431,7 @@ async function main() {
     /* 11 · Cost */
     mark("scene 11 cost");
     if (tg) {
-      await tg.send("What did all that cost us this morning?");
-      await tg.waitFor(/tokens/);
+      await tg.ask("What did all that cost us this morning?", /tokens/);
       mark("cost answered");
       await tg.me.pause(1500);
     }
