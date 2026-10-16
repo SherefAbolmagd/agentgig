@@ -159,6 +159,6 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
     const user = (await db().collection("users").doc(userId).get()).data() as { businessName?: string } | undefined;
     const draft = await createEmailDraft(userId, { to: o.customerEmail, subject: `Your quote ${o.reference}`, body: quoteText(o, user?.businessName ?? "") });
     if (!draft) return notDelivered("Quote ready. Connect Google or Microsoft 365 to save it as an email draft, or copy it from the result.");
-    return { delivered: true, summary: `Quote saved as an ${draft.app} draft. Nothing was sent.`, links: [{ label: "Open draft", url: draft.url }] };
+    return { delivered: true, summary: `Quote saved as a draft in ${draft.app}. Nothing was sent.`, links: [{ label: "Open draft", url: draft.url }] };
   },
 });

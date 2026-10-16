@@ -80,6 +80,6 @@ export const bookingPrep = defineAgent<BookingInput, BookingOutput>({
       .join("\n\n");
     const draft = await createEmailDraft(userId, { to: self, subject: `Meeting briefs for ${o.day}`, body });
     if (!draft) return notDelivered("Briefs ready in AgentGig. Connect Google or Microsoft 365 to get them in your inbox.");
-    return { delivered: true, summary: `Briefs saved as an ${draft.app} draft to yourself`, links: [{ label: "Open draft", url: draft.url }] };
+    return { delivered: true, summary: `Briefs saved as a draft to yourself in ${draft.app}`, links: [{ label: "Open draft", url: draft.url }] };
   },
 });

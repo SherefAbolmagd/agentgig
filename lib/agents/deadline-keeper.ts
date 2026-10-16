@@ -154,5 +154,5 @@ async function emailList(o: DeadlineOutput, userId: string): Promise<Delivery> {
     ].join("\n");
     const draft = await createEmailDraft(userId, { to: await selfAddress(userId), subject: o.urgent ? `${o.urgent} deadline(s) in the next 2 weeks` : "Upcoming business deadlines", body });
     if (!draft) return notDelivered("Deadlines listed in AgentGig. Connect Google or Microsoft 365 to get them by email.");
-  return { delivered: true, summary: `Deadline list saved as an ${draft.app} draft to yourself`, links: [{ label: "Open draft", url: draft.url }] };
+  return { delivered: true, summary: `Deadline list saved as a draft to yourself in ${draft.app}`, links: [{ label: "Open draft", url: draft.url }] };
 }

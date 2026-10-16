@@ -63,6 +63,6 @@ export const onboardingBuddy = defineAgent<OnboardingInput, OnboardingOutput>({
   async deliver(o, { userId }): Promise<Delivery> {
     const draft = await createEmailDraft(userId, { to: o.newHireEmail, subject: o.welcomeEmail.subject, body: o.welcomeEmail.body });
     if (!draft) return notDelivered("Welcome email ready. Connect Google or Microsoft 365 to save it as an email draft.");
-    return { delivered: true, summary: `Welcome email saved as an ${draft.app} draft`, links: [{ label: "Open draft", url: draft.url }] };
+    return { delivered: true, summary: `Welcome email saved as a draft in ${draft.app}`, links: [{ label: "Open draft", url: draft.url }] };
   },
 });
