@@ -5,6 +5,7 @@ import { scrubText } from "@/lib/dlp";
 import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
 import { log } from "@/lib/log";
+import { enqueue } from "@/lib/triggers";
 import { DEFAULT_MEMORY_SETTINGS, SHELF_INFO, defaultShelves } from "@/lib/shelves";
 import { generateJson } from "@/lib/vertex";
 import {
@@ -242,24 +243,35 @@ const savedDoc = (accountId: string, shelf: Shelf, item: Item, source: Source) =
   updatedAt: FieldValue.serverTimestamp(),
 });
 
-/** Stores one fact agents can use from now on. */
+/**
+ * Stores one fact agents can use from now on. It goes to Firestore at once;
+ * with Memory Bank on, a background job then moves it there (a Memory Bank
+ * save can take from a few seconds to over a minute).
+ */
 async function saveFact(accountId: string, shelf: Shelf, item: Item, source: Source, extra: Partial<MemoryDoc> = {}) {
-  if (bankEnabled()) {
-    try {
-      await saveToBank(accountId, shelf, item, source, extra);
-      return;
-    } catch (err) {
-      // Keep the fact in Firestore; recall still finds it there, and syncToBank can move it later.
-      log("WARNING", "memory.bank_save_failed", { component: "memory", shelf, error: String(err) });
-    }
-  }
   await memory().add({ ...savedDoc(accountId, shelf, item, source), ...extra, fact: item.fact, createdAt: FieldValue.serverTimestamp() });
+  await queueBankSync(accountId);
+}
+
+const SYNC_WINDOW_MS = 10_000;
+
+/**
+ * Queues one sync per account per 10-second window, run just after the
+ * window closes, so every fact saved in it is picked up by that job.
+ */
+export async function queueBankSync(accountId: string) {
+  if (!bankEnabled()) return;
+  const windowEnd = Math.ceil((Date.now() + 1) / SYNC_WINDOW_MS) * SYNC_WINDOW_MS;
+  await enqueue(
+    { key: `memsync-${accountId}-${windowEnd}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100), userId: accountId, agentId: "memory", input: {}, origin: "event", syncMemory: true },
+    new Date(windowEnd + 2000),
+  ).catch((err) => log("WARNING", "memory.sync_queue_failed", { component: "memory", error: String(err) }));
 }
 
 /** Memory Bank merges the fact with the shelf; Firestore mirrors whatever it created, updated or removed. */
 async function saveToBank(accountId: string, shelf: Shelf, item: Item, source: Source, extra: Partial<MemoryDoc>) {
   const base = savedDoc(accountId, shelf, item, source);
-  const changes = await bankGenerate(accountId, shelf, [item.fact]);
+  const changes = await bankGenerate(accountId, shelf, [item.fact], { waitSeconds: 120 });
   for (const c of changes) {
     const ref = memory().doc(memoryIdOf(c.name));
     if (c.action === "DELETED") {
@@ -274,13 +286,11 @@ async function saveToBank(accountId: string, shelf: Shelf, item: Item, source: S
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Owner actions (Memory page)                                         */
-/* ------------------------------------------------------------------ */
+const CLAIM_MS = 5 * 60_000;
 
 /**
- * Moves an account's Firestore-only facts (demo seeds, or facts saved while
- * Memory Bank was down) into Memory Bank so they merge with new ones.
+ * Moves an account's Firestore-only facts into Memory Bank so they merge with
+ * the rest. Each fact is claimed first, so overlapping jobs never move it twice.
  */
 export async function syncToBank(accountId: string): Promise<number> {
   if (!bankEnabled()) return 0;
@@ -289,11 +299,22 @@ export async function syncToBank(accountId: string): Promise<number> {
   for (const d of snap.docs) {
     const m = d.data() as MemoryDoc;
     if (m.status !== "saved" || m.memoryName) continue;
-    await saveToBank(accountId, m.shelf, { fact: m.fact, expiresAt: (m.expiresAt as Timestamp | null) ?? null }, m.source, {
-      ...(m.pinned && { pinned: true }),
+    const claimed = await db().runTransaction(async (tx) => {
+      const cur = await tx.get(d.ref);
+      const since = cur.get("syncingSince") as Timestamp | undefined;
+      if (!cur.exists || cur.get("memoryName") || (since && Date.now() - since.toMillis() < CLAIM_MS)) return false;
+      tx.update(d.ref, { syncingSince: Timestamp.now() });
+      return true;
     });
-    await d.ref.delete();
-    moved++;
+    if (!claimed) continue;
+    try {
+      await saveToBank(accountId, m.shelf, { fact: m.fact, expiresAt: (m.expiresAt as Timestamp | null) ?? null }, m.source, { ...(m.pinned && { pinned: true }) });
+      await d.ref.delete();
+      moved++;
+    } catch (err) {
+      await d.ref.update({ syncingSince: FieldValue.delete() }).catch(() => undefined);
+      throw err;
+    }
   }
   return moved;
 }
@@ -323,12 +344,8 @@ export async function addFact(accountId: string, person: { uid: string; name: st
 export async function approveFact(accountId: string, id: string) {
   const { ref, m } = await ownFact(accountId, id);
   if (m.status !== "pending") throw new GatewayError("ALREADY_SETTLED", "This fact is already saved.");
-  if (bankEnabled()) {
-    await saveFact(accountId, m.shelf, { fact: m.fact, expiresAt: (m.expiresAt as Timestamp | null) ?? null }, m.source);
-    await ref.delete();
-  } else {
-    await ref.update({ status: "saved", updatedAt: FieldValue.serverTimestamp() });
-  }
+  await ref.update({ status: "saved", updatedAt: FieldValue.serverTimestamp() });
+  await queueBankSync(accountId);
 }
 
 export async function editFact(accountId: string, id: string, fact: string) {

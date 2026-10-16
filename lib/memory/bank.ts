@@ -74,16 +74,21 @@ interface Operation {
  * Adds already-extracted facts and lets Memory Bank merge them with what the
  * shelf holds. Returns what changed, with each memory's current text.
  */
-export async function bankGenerate(accountId: string, shelf: Shelf, facts: string[]): Promise<{ name: string; fact: string; action: GeneratedAction }[]> {
+export async function bankGenerate(
+  accountId: string,
+  shelf: Shelf,
+  facts: string[],
+  { waitSeconds = 45 } = {},
+): Promise<{ name: string; fact: string; action: GeneratedAction }[]> {
   let op = await call<Operation>("POST", `${env().MEMORY_ENGINE}/memories:generate`, {
     directMemoriesSource: { directMemories: facts.slice(0, 5).map((fact) => ({ fact })) },
     scope: scope(accountId, shelf),
   });
-  for (let i = 0; !op.done && i < 45; i++) {
+  for (let i = 0; !op.done && i < waitSeconds; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     op = await call<Operation>("GET", op.name);
   }
-  if (!op.done) throw new Error("Memory Bank didn't finish saving within 45 seconds.");
+  if (!op.done) throw new Error(`Memory Bank didn't finish saving within ${waitSeconds} seconds.`);
   if (op.error) throw new Error(`Memory Bank couldn't save: ${op.error.message}`);
   const changes = op.response?.generatedMemories ?? [];
   return Promise.all(

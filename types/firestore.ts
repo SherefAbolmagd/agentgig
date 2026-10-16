@@ -157,6 +157,8 @@ export interface MemoryDoc {
   usedBy?: string[];
   /** Memory Bank resource name, when Memory Bank stores it. */
   memoryName?: string;
+  /** Set while a background job copies the fact into Memory Bank. */
+  syncingSince?: Ts;
   /** When agents stop seeing it; a Firestore TTL policy deletes it later. */
   expiresAt?: Ts | null;
   createdAt: Ts;

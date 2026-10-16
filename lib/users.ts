@@ -3,8 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { DEMO_USER } from "@/data/agents";
 import { db } from "./firebase-admin";
 import { hireAgent } from "./hires";
-import { bankEnabled } from "./memory/bank";
-import { enqueue } from "./triggers";
+import { queueBankSync } from "./memory";
 import { COLLECTIONS, type MemoryDoc, type UserDoc } from "@/types/firestore";
 
 export const WELCOME_TOKENS = 100;
@@ -56,10 +55,8 @@ export async function ensureUser(caller: Caller): Promise<{ user: UserDoc; creat
     await hireAgent(caller.uid, { agentId: "echosocial", triggerId: "manual", approvalMode: "ask", knowledgeAccess: ["profile"] });
     await hireAgent(caller.uid, { agentId: "receipthero", triggerId: "inbox", approvalMode: "auto", knowledgeAccess: ["profile"] });
     await seedDemoMemory(caller.uid);
-    if (bankEnabled()) {
-      // Moving the seeds into Memory Bank takes ~5 s a fact, so it happens off the sign-in path.
-      await enqueue({ key: `memsync-${caller.uid}`.slice(0, 100), userId: caller.uid, agentId: "memory", input: {}, origin: "event", syncMemory: true });
-    }
+    // Moving the seeds into Memory Bank takes seconds a fact, so it happens off the sign-in path.
+    await queueBankSync(caller.uid);
   }
   return { user: (await ref.get()).data() as UserDoc, created };
 }
