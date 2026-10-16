@@ -13,7 +13,7 @@ import { hasRole } from "@/lib/org";
 import { SHELF_INFO } from "@/lib/shelves";
 import { filePart, generateWithTools, textPart } from "@/lib/vertex";
 import { COLLECTIONS, SHELVES, type AgentDoc, type ApprovalDoc, type HireDoc, type MemoryDoc, type Role, type TaskDoc, type UserDoc } from "@/types/firestore";
-import { escapeHtml, sendMessage, type InlineButton } from "./api";
+import { escapeHtml, sendMessage, type InlineButton, type LiveStatus } from "./api";
 import type { LinkedPerson } from "./link";
 
 /**
@@ -53,9 +53,18 @@ export function toContents(turns: ChatTurn[]): Content[] {
   }));
 }
 
-/** Posts in the chat under a name, e.g. "Invoice Chaser", so each agent feels like a colleague. */
-export async function post(chatId: number, name: string, text: string, buttons?: InlineButton[][]) {
-  return sendMessage(chatId, `<b>${escapeHtml(name)}</b>\n${escapeHtml(text)}`, buttons);
+const FOLD_OVER = 280;
+
+/**
+ * Posts in the chat under a name, e.g. "Invoice Chaser", so each agent feels
+ * like a colleague. A long `quote` (a draft post, a quote) arrives folded,
+ * with Telegram's own "show more".
+ */
+export async function post(chatId: number, name: string, text: string, buttons?: InlineButton[][], quote?: string) {
+  const body = quote
+    ? `${text ? `${escapeHtml(text)}\n` : ""}<blockquote${quote.length > FOLD_OVER ? " expandable" : ""}>${escapeHtml(quote)}</blockquote>`
+    : escapeHtml(text);
+  return sendMessage(chatId, `<b>${escapeHtml(name)}</b>\n${body}`, buttons);
 }
 
 /* ------------------------------------------------------------------ */
@@ -208,6 +217,7 @@ interface ToolContext {
   person: LinkedPerson;
   account: UserDoc;
   team: TeamMember[];
+  live?: LiveStatus;
 }
 
 async function runTool(ctx: ToolContext, name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -269,6 +279,7 @@ async function delegate(ctx: ToolContext, agentId: string, input: Record<string,
   if (!member) return { error: `${agentId} isn't on this team. Hired: ${ctx.team.map((t) => t.agent.slug).join(", ") || "nobody"}.` };
   if (member.handler?.files?.required) return { error: `${member.agent.name} needs a file. Ask them to upload it on agentgig.si for now.` };
   const { person } = ctx;
+  await ctx.live?.set(`Handing this to ${member.agent.name}…`);
   try {
     const res = await runTask({
       userId: person.accountId,
@@ -279,6 +290,7 @@ async function delegate(ctx: ToolContext, agentId: string, input: Record<string,
       requestedBy: person.uid,
       telegramChatId: person.link.chatId,
     });
+    ctx.live?.stop();
     await postResult(person, member, res.taskId, res.status, res.output, res.approvalId, res.delivery?.summary as string | undefined);
     return { status: res.status, tokensCharged: res.tokensCharged, balance: res.balance, posted: true };
   } catch (err) {
@@ -291,25 +303,25 @@ async function delegate(ctx: ToolContext, agentId: string, input: Record<string,
 async function postResult(person: LinkedPerson, member: TeamMember, taskId: string, status: string, output: Record<string, unknown>, approvalId?: string, summary?: string) {
   const name = member.agent.name;
   const draft = member.handler?.approval(output);
-  const preview = draft ? `${draft.title}\n\n${draft.preview}`.trim() : "";
+  const preview = draft?.preview.trim() ?? "";
   let text: string;
   let buttons: InlineButton[][] | undefined;
   if (status === "awaiting_approval" && approvalId) {
     if (hasRole(person.role, "manager")) {
-      text = preview;
+      text = draft?.title ?? "Here's my draft.";
       buttons = [[
         { text: "Approve", callback_data: `ap:${approvalId}:a` },
         ...(member.handler?.editableField ? [{ text: "Edit", callback_data: `ap:${approvalId}:e` }] : []),
         { text: "Skip", callback_data: `ap:${approvalId}:s` },
       ]];
     } else {
-      text = `${preview}\n\nThis needs an owner or manager's OK. I've let them know.`;
+      text = `${draft?.title ?? "Here's my draft."} It needs an owner or manager's OK; I've let them know.`;
     }
   } else {
-    text = [summary, preview].filter(Boolean).join("\n\n") || "Done.";
+    text = summary ?? draft?.title ?? "Done.";
   }
-  await post(person.link.chatId, name, text, buttons);
-  await saveTurn(person, { role: "agent", agentName: name, text: text.slice(0, 1500) });
+  await post(person.link.chatId, name, text, buttons, preview || undefined);
+  await saveTurn(person, { role: "agent", agentName: name, text: `${text}\n${preview}`.slice(0, 1500) });
   void taskId;
 }
 
@@ -317,7 +329,7 @@ async function postResult(person: LinkedPerson, member: TeamMember, taskId: stri
 /* One message                                                         */
 /* ------------------------------------------------------------------ */
 
-export async function handlePersonMessage(person: LinkedPerson, message: { text?: string; voice?: Buffer }) {
+export async function handlePersonMessage(person: LinkedPerson, message: { text?: string; voice?: Buffer }, live?: LiveStatus) {
   const [accountSnap, team, openApprovals, turns] = await Promise.all([
     db().collection(COLLECTIONS.users).doc(person.accountId).get(),
     loadTeam(person.accountId),
@@ -332,13 +344,14 @@ export async function handlePersonMessage(person: LinkedPerson, message: { text?
     : [textPart(message.text ?? "")];
   await saveTurn(person, { role: "person", text: message.text ?? "[voice note]" });
 
-  const ctx: ToolContext = { person, account, team };
+  const ctx: ToolContext = { person, account, team, live };
   const { text } = await generateWithTools({
     system: systemPrompt(account, person, team, openApprovals.data().count),
     contents: [...toContents(turns), { role: "user", parts }],
     tools: TOOLS,
     run: (name, args) => runTool(ctx, name, args),
   });
+  live?.stop();
   if (text) {
     await post(person.link.chatId, SUPERVISOR_NAME, text);
     await saveTurn(person, { role: "supervisor", text });

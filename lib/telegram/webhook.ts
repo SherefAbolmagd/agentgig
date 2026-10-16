@@ -10,7 +10,7 @@ import { hasRole } from "@/lib/org";
 import { consume } from "@/lib/rate-limit";
 import { enqueue } from "@/lib/triggers";
 import { COLLECTIONS } from "@/types/firestore";
-import { answerCallback, clearButtons, downloadFile, escapeHtml, sendMessage, sendTyping } from "./api";
+import { answerCallback, downloadFile, escapeHtml, liveStatus, markDecided, react, sendMessage } from "./api";
 import { isLinkCode, redeemLinkCode, resolveSender, setPendingEdit, unlinkTelegram, type LinkedPerson, type TelegramSender } from "./link";
 import { handlePersonMessage, post, saveTurn, SUPERVISOR_NAME } from "./supervisor";
 
@@ -94,6 +94,10 @@ export async function handleTelegramUpdate(update: TgUpdate): Promise<string> {
   const cb = update.callback_query;
   if (cb) {
     if (cb.message?.chat.type !== "private") return "ignored: not private";
+    if (cb.data === "done") {
+      await answerCallback(cb.id, "Already decided.");
+      return "already decided";
+    }
     const person = await resolveSender(cb.from.id);
     if (!person) {
       await answerCallback(cb.id, "This chat isn't linked to an AgentGig team.");
@@ -155,7 +159,8 @@ export async function handleTelegramUpdate(update: TgUpdate): Promise<string> {
     if (isGatewayError(err)) await post(m.chat.id, SUPERVISOR_NAME, err.message);
     return "rate limited";
   }
-  await sendTyping(m.chat.id);
+  // Seen it, like a colleague glancing up. Becomes 👍 when the work is done.
+  await react(m.chat.id, m.message_id, "👀");
   await queue({ updateId: update.update_id, telegramUserId: m.from.id, chatId: m.chat.id, kind: "message", text, voiceFileId: m.voice?.file_id, messageId: m.message_id }, person);
   return "queued";
 }
@@ -182,11 +187,19 @@ export async function runTelegramJob(job: TelegramJob): Promise<string> {
       await saveTurn(person, { role: "person", text: job.text });
       return "edited";
     }
-    const voice = job.voiceFileId ? await downloadFile(job.voiceFileId) : undefined;
-    await handlePersonMessage(person, { text: job.text, voice });
+    const live = liveStatus(job.chatId, job.updateId);
+    await live.start();
+    try {
+      const voice = job.voiceFileId ? await downloadFile(job.voiceFileId) : undefined;
+      await handlePersonMessage(person, { text: job.text, voice }, live);
+    } finally {
+      live.stop();
+    }
+    if (job.messageId) await react(job.chatId, job.messageId, "👍");
     return "answered";
   } catch (err) {
     log("WARNING", "telegram.job_failed", { component: "telegram", kind: job.kind, error: err instanceof Error ? err.message : String(err) });
+    if (job.kind === "message" && job.messageId) await react(job.chatId, job.messageId, "🤔");
     await post(job.chatId, SUPERVISOR_NAME, isGatewayError(err) ? err.message : "Something went wrong on my side. Try again in a minute.").catch(() => undefined);
     return "failed";
   }
@@ -208,12 +221,12 @@ async function onButton(person: LinkedPerson, job: TelegramJob): Promise<string>
   try {
     // resolveApproval checks the approval belongs to this account.
     const res = await resolveApproval(person.accountId, approvalId, { action: choice === "a" ? "approve" : "skip" });
-    if (job.messageId) await clearButtons(job.chatId, job.messageId);
+    if (job.messageId) await markDecided(job.chatId, job.messageId, `${res.status === "delivered" ? "✓ Approved" : "Skipped"} by ${person.link.firstName}`);
     await post(job.chatId, SUPERVISOR_NAME, res.status === "delivered" ? `Approved. ${res.delivery?.summary ?? ""}`.trim() : "Skipped. Nothing was sent.");
     return res.status;
   } catch (err) {
     if (isGatewayError(err) && err.code === "ALREADY_SETTLED") {
-      if (job.messageId) await clearButtons(job.chatId, job.messageId);
+      if (job.messageId) await markDecided(job.chatId, job.messageId, "Already decided");
       await post(job.chatId, SUPERVISOR_NAME, "Someone already decided on that one.");
       return "already settled";
     }

@@ -27,7 +27,7 @@ export async function notifyApproval(accountId: string, approvalId: string, exce
       ...(editable ? [{ text: "Edit", callback_data: `ap:${approvalId}:e` }] : []),
       { text: "Skip", callback_data: `ap:${approvalId}:s` },
     ]];
-    await Promise.all(people.map((p) => post(p.link.chatId, agent?.name ?? approval.agentId, `${approval.title}\n\n${approval.preview}`, buttons)));
+    await Promise.all(people.map((p) => post(p.link.chatId, agent?.name ?? approval.agentId, approval.title, buttons, approval.preview)));
   } catch (err) {
     log("WARNING", "telegram.notify_failed", { component: "telegram", error: String(err) });
   }

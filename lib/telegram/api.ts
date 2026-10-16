@@ -63,10 +63,49 @@ export async function answerCallback(callbackQueryId: string, text?: string) {
   await tg("answerCallbackQuery", { callback_query_id: callbackQueryId, ...(text && { text }) }).catch(() => undefined);
 }
 
-/** Removes the buttons under a message once its draft is decided. */
-export async function clearButtons(chatId: number, messageId: number) {
-  await tg("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
+/** Swaps the buttons under a decided draft for one line saying what happened, e.g. "✓ Approved by Sam". */
+export async function markDecided(chatId: number, messageId: number, label: string) {
+  await tg("editMessageReplyMarkup", {
+    chat_id: chatId,
+    message_id: messageId,
+    reply_markup: { inline_keyboard: [[{ text: label, callback_data: "done" }]] },
+  }).catch(() => undefined);
 }
+
+/** Bots may set one reaction per message, from Telegram's fixed list (👀, 👍, ✍, 🤔 are on it). */
+export type Reaction = "👀" | "👍" | "✍" | "🤔";
+
+export async function react(chatId: number, messageId: number, emoji: Reaction) {
+  await tg("setMessageReaction", { chat_id: chatId, message_id: messageId, reaction: [{ type: "emoji", emoji }] }).catch(() => undefined);
+}
+
+/**
+ * A live status line while the team works ("Thinking…", "Handing this to
+ * Quote Builder…"), shown with sendMessageDraft. A draft is a 30-second
+ * preview, so it's refreshed every 20 s until stopped; empty text shows
+ * Telegram's own "Thinking…" placeholder.
+ */
+export function liveStatus(chatId: number, draftId: number) {
+  let text = "";
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const id = draftId % 2_147_483_647 || 1;
+  const push = () => tg("sendMessageDraft", { chat_id: chatId, draft_id: id, text }).catch(() => undefined);
+  return {
+    async start() {
+      await push();
+      timer = setInterval(push, 20_000);
+    },
+    async set(next: string) {
+      text = next;
+      await push();
+    },
+    stop() {
+      if (timer) clearInterval(timer);
+      timer = undefined;
+    },
+  };
+}
+export type LiveStatus = ReturnType<typeof liveStatus>;
 
 const MAX_VOICE_BYTES = 10 * 1024 * 1024;
 
