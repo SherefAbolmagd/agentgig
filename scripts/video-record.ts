@@ -431,7 +431,7 @@ async function main() {
     /* 11 · Cost */
     mark("scene 11 cost");
     if (tg) {
-      await tg.ask("What did all that cost us this morning?", /tokens/);
+      await tg.ask("What did all that cost us today?", /tokens/);
       mark("cost answered");
       await tg.me.pause(1500);
     }

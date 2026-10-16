@@ -6,9 +6,9 @@
   "05": "Two supplier invoices land in the inbox. A Cloud Storage event wakes ReceiptHero through Pub/Sub and Cloud Tasks. Gemini reads each invoice, and code checks every sum. One supplier has overcharged by thirty-eight pounds forty.",
   "06": "Sam is out, so the draft comes to Telegram. One tap: it's logged to the spend sheet, and a correction email waits in Gmail.",
   "07": "Sam asks Ada, the team lead, for the VAT summary. Ada hands it to VAT Reconciler, an agent from another company on its own server. It receives the audited invoices over the A2A protocol, never Sam's logins. Seventy pounds to reclaim, and the overcharged invoice is held back.",
-  "08": "A customer wants coffee and pastries for forty people. Quote Builder prices every line from Sam's own list: four hundred and ninety-eight pounds with VAT, saved as a Gmail draft. Sam adds a note about vegan guests, and Ada saves it to company memory for every agent.",
+  "08": "A customer wants coffee and pastries for forty people. Quote Builder prices every line from Sam's own list, adds VAT, and saves the quote as a Gmail draft. Sam adds a note about vegan guests, and Ada saves it to company memory for every agent.",
   "09": "A two-star review comes in. ReviewPulse drafts a reply in Café Lumen's voice. Sam rewrites it and approves. Nothing goes out without a person's OK.",
   "10": "Back at the desk, RotaBuilder plans next week, and code checks every shift against availability and hours.",
-  "11": "The whole morning cost eighteen tokens. Tokens are held when work starts and charged only when it's delivered. Failed work is free.",
+  "11": "Everything the team did today cost eighteen tokens. Tokens are held when work starts and charged only when it's delivered. Failed work is free.",
   "12": "Under the hood, one gateway on Cloud Run runs every task through verify, reserve, scrub, ground, run and deliver, with Gemini on Vertex AI, Firestore and Memory Bank. AgentGig: AI employees that work as one team."
 }

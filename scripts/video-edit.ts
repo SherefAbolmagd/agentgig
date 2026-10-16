@@ -149,15 +149,15 @@ async function main() {
   const keys = Object.keys(narration);
   const audioInputs = keys.flatMap((k) => ["-i", `${NARR}/${k}.wav`]);
   const delays = keys.map((k, i) => `[${i + 1}:a]adelay=${Math.round((starts[k] + LEAD) * 1000)}:all=1[a${i}]`).join(";");
-  const mix = `${keys.map((_, i) => `[a${i}]`).join("")}amix=inputs=${keys.length}:normalize=0,apad[aud]`;
+  const mix = `${keys.map((_, i) => `[a${i}]`).join("")}amix=inputs=${keys.length}:normalize=0,apad=whole_dur=${total.toFixed(3)}[aud]`;
   // Subtitles filter paths need escaped colons on Windows.
   const subPath = captions.replace(/\\/g, "/").replace(/:/g, "\\:");
-  const style = "FontName=Arial,FontSize=15,PrimaryColour=&H00FFFFFF,BackColour=&H99000000,BorderStyle=4,Outline=0,Shadow=0,MarginV=26";
+  const style = "FontName=Arial,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H40000000,BackColour=&H40000000,BorderStyle=3,Outline=6,Shadow=0,MarginV=22";
   ff([
     "-i", video, ...audioInputs,
     "-filter_complex", `${delays};${mix};[0:v]subtitles='${subPath}':force_style='${style}'[v]`,
-    "-map", "[v]", "-map", "[aud]", "-shortest",
-    "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+    "-map", "[v]", "-map", "[aud]", "-t", total.toFixed(3),
+    "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
     OUT,
   ]);
   console.log(`✓ ${OUT} (${total.toFixed(1)} s) and ${OUT.replace(/\.mp4$/, ".srt")}`);
