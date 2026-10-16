@@ -98,6 +98,24 @@ export function describeInput(schema: z.ZodType | undefined): string {
     .join("; ");
 }
 
+/** The business profile, so agent inputs like a website or audience come from it instead of a question. */
+export function profileLines(account: Pick<UserDoc, "businessProfile">): string[] {
+  const p = account.businessProfile;
+  if (!p) return ["The business profile isn't filled in yet (Company knowledge page)."];
+  return [
+    "Business profile:",
+    `- About: ${p.description}`,
+    `- Products and prices: ${p.products}`,
+    `- Customers: ${p.audience}`,
+    `- Tone of voice: ${p.toneOfVoice}`,
+    p.avoidWords.length ? `- Never use: ${p.avoidWords.join(", ")}` : "",
+    p.website ? `- Website: ${p.website}` : "",
+    p.location ? `- Location: ${p.location}` : "",
+    p.openingHours ? `- Opening hours: ${p.openingHours}` : "",
+    p.reviewUrl ? `- Review link: ${p.reviewUrl}` : "",
+  ].filter(Boolean);
+}
+
 function systemPrompt(account: UserDoc, person: LinkedPerson, team: TeamMember[], pendingApprovals: number) {
   const tz = account.businessProfile?.timeZone ?? "Europe/London";
   const now = new Date();
@@ -110,7 +128,7 @@ function systemPrompt(account: UserDoc, person: LinkedPerson, team: TeamMember[]
   return [
     `You are ${SUPERVISOR_NAME}, the team lead of ${account.businessName}'s AI staff on AgentGig. You are chatting on Telegram with ${person.link.firstName}. ${roleRules[person.role]}`,
     `Today is ${today}.`,
-    account.businessProfile?.description ? `About the business: ${account.businessProfile.description}` : "",
+    ...profileLines(account),
     "",
     "Your team (agentId: what it does; inputs):",
     ...team.map(({ agent, handler }) =>
@@ -121,7 +139,7 @@ function systemPrompt(account: UserDoc, person: LinkedPerson, team: TeamMember[]
     "",
     "How you work:",
     "- Hand work to the right agent with delegate. Never do an agent's job yourself and never invent results, numbers or customer details.",
-    "- Fill inputs from the conversation and company memory; use defaults when sensible. If something required is missing, ask one short question first.",
+    "- Fill inputs from the business profile above, the conversation and company memory (e.g. a website or audience input comes from the profile); use defaults when sensible. Only ask when something required is in none of these, and then ask one short question.",
     "- After delegate, the agent posts its own result in the chat. Then reply with one short sentence at most, or nothing if there's nothing to add.",
     "- Asked about the business (customers, stock, payment habits), check company_memory before saying you don't know.",
     "- If they tell you something the whole team should know, save it with remember (pick the best shelf; give an expiry date for temporary facts).",

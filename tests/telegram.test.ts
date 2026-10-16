@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { z } from "zod";
 import { escapeHtml } from "@/lib/telegram/api";
 import { isLinkCode } from "@/lib/telegram/link";
-import { describeInput, toContents } from "@/lib/telegram/supervisor";
+import { describeInput, profileLines, toContents } from "@/lib/telegram/supervisor";
 import { verifyTelegramSecret } from "@/lib/telegram/webhook";
 
 test("link codes accept only Telegram's start-parameter alphabet and a sensible length", () => {
@@ -47,4 +47,22 @@ test("chat history keeps who said what, with agents named", () => {
 
 test("text sent to Telegram can't inject HTML", () => {
   assert.equal(escapeHtml("<b>5 > 3 & 2</b>"), "&lt;b&gt;5 &gt; 3 &amp; 2&lt;/b&gt;");
+});
+
+test("Ada sees the whole business profile, so she doesn't ask for the website", () => {
+  const lines = profileLines({
+    businessProfile: {
+      description: "Bakery in Leeds",
+      products: "Sourdough £4.80",
+      audience: "Office managers",
+      toneOfVoice: "Warm",
+      avoidWords: ["artisanal"],
+      website: "https://hearthandcrumb.example",
+    },
+  }).join("
+");
+  assert.match(lines, /Website: https:\/\/hearthandcrumb\.example/);
+  assert.match(lines, /Customers: Office managers/);
+  assert.match(lines, /Never use: artisanal/);
+  assert.match(profileLines({}).join(""), /isn't filled in/);
 });
