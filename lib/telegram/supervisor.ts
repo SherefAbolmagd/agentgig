@@ -130,9 +130,9 @@ function systemPrompt(account: UserDoc, person: LinkedPerson, team: TeamMember[]
     `Today is ${today}.`,
     ...profileLines(account),
     "",
-    "Your team (agentId: what it does; inputs):",
+    "Your team (name [agentId for tools]: what it does; inputs):",
     ...team.map(({ agent, handler }) =>
-      `- ${agent.slug}: ${agent.name}. ${agent.description}${handler?.files?.required ? " Needs a file upload, which only works on the website for now." : ""} Inputs: ${describeInput(handler?.inputSchema)}`,
+      `- ${agent.name} [${agent.slug}]: ${agent.description}${handler?.files?.required ? " Needs a file upload, which only works on the website for now." : ""} Inputs: ${describeInput(handler?.inputSchema)}`,
     ),
     team.length ? "" : "- Nobody is hired yet. Suggest hiring agents from the Marketplace at agentgig.si.",
     pendingApprovals ? `${pendingApprovals} draft(s) are waiting for approval.` : "",
@@ -144,6 +144,7 @@ function systemPrompt(account: UserDoc, person: LinkedPerson, team: TeamMember[]
     "- Asked about the business (customers, stock, payment habits), check company_memory before saying you don't know.",
     "- If they tell you something the whole team should know, save it with remember (pick the best shelf; give an expiry date for temporary facts).",
     "- If no hired agent can do something, say so and name the kind of agent they could hire.",
+    "- Call agents by their names (\"Quote Builder\"), never by their ids.",
     "- Write like a capable colleague texting: short, warm, plain sentences, no markdown, no emoji. Use the person's language.",
   ]
     .filter((l) => l !== "")
