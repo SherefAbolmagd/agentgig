@@ -79,11 +79,11 @@ export async function bankGenerate(accountId: string, shelf: Shelf, facts: strin
     directMemoriesSource: { directMemories: facts.slice(0, 5).map((fact) => ({ fact })) },
     scope: scope(accountId, shelf),
   });
-  for (let i = 0; !op.done && i < 20; i++) {
+  for (let i = 0; !op.done && i < 45; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     op = await call<Operation>("GET", op.name);
   }
-  if (!op.done) throw new Error("Memory Bank didn't finish saving within 20 seconds.");
+  if (!op.done) throw new Error("Memory Bank didn't finish saving within 45 seconds.");
   if (op.error) throw new Error(`Memory Bank couldn't save: ${op.error.message}`);
   const changes = op.response?.generatedMemories ?? [];
   return Promise.all(
@@ -96,6 +96,21 @@ export async function bankGenerate(accountId: string, shelf: Shelf, facts: strin
 }
 
 /** Memory Bank wants the fact in every update, even when only the expiry changes. */
+/** Every memory in one scope, page by page (no search), e.g. to delete an account's memory. */
+export async function bankListScope(accountId: string, shelf: Shelf): Promise<string[]> {
+  const names: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await call<{ retrievedMemories?: { memory: BankMemory }[]; nextPageToken?: string }>("POST", `${env().MEMORY_ENGINE}/memories:retrieve`, {
+      scope: scope(accountId, shelf),
+      simpleRetrievalParams: { pageSize: 100, ...(pageToken && { pageToken }) },
+    });
+    names.push(...(res.retrievedMemories ?? []).map((r) => r.memory.name));
+    pageToken = res.nextPageToken;
+  } while (pageToken);
+  return names;
+}
+
 export async function bankSetExpiry(name: string, fact: string, expiresAt: Date | null): Promise<void> {
   if (!expiresAt) return;
   await call("PATCH", `${name}?updateMask=expire_time`, { fact, expireTime: expiresAt.toISOString() }).catch((err) =>

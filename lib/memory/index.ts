@@ -18,7 +18,7 @@ import {
   type TaskDoc,
   type UserDoc,
 } from "@/types/firestore";
-import { bankDelete, bankEnabled, bankGenerate, bankRetrieve, bankSetExpiry, bankUpdate, memoryIdOf } from "./bank";
+import { bankDelete, bankEnabled, bankGenerate, bankListScope, bankRetrieve, bankSetExpiry, bankUpdate, memoryIdOf } from "./bank";
 
 /**
  * Company memory: short facts every agent on an account can share.
@@ -75,6 +75,7 @@ export async function recall(user: UserDoc, hire: HireDoc, agent: AgentDoc, quer
     .filter((m) => live(m, now) && shelves.includes(m.shelf))
     .sort((a, b) => (b.updatedAt?.toMillis() ?? 0) - (a.updatedAt?.toMillis() ?? 0));
   const pinned = facts.filter((m) => m.pinned);
+  const mirrored = new Set(facts.map((m) => m.id));
 
   // Memory Bank finds its facts by meaning; facts only in Firestore (Memory
   // Bank off, seeded, or saved while it was down) count by recency.
@@ -85,7 +86,8 @@ export async function recall(user: UserDoc, hire: HireDoc, agent: AgentDoc, quer
         await Promise.all(
           shelves.map((shelf) =>
             bankRetrieve(accountId, shelf, query, PER_SHELF)
-              .then((ms) => ms.map((m) => ({ id: memoryIdOf(m.name), shelf, fact: m.fact })))
+              // Only memories Firestore mirrors: a save that timed out may finish later without one.
+              .then((ms) => ms.map((m) => ({ id: memoryIdOf(m.name), shelf, fact: m.fact })).filter((m) => mirrored.has(m.id)))
               .catch((err) => {
                 log("WARNING", "memory.recall_failed", { component: "memory", shelf, error: String(err) });
                 return [];
@@ -357,12 +359,13 @@ export async function saveMemorySettings(accountId: string, settings: MemorySett
   await db().collection(COLLECTIONS.users).doc(accountId).update({ memory: settings, updatedAt: FieldValue.serverTimestamp() });
 }
 
-/** Removes the account's facts from Memory Bank (the Firestore docs go with the account). */
+/**
+ * Removes everything the account has in Memory Bank, shelf by shelf, including
+ * memories Firestore never mirrored (the Firestore docs go with the account).
+ */
 export async function forgetAccountMemory(accountId: string) {
   if (!bankEnabled()) return;
-  const snap = await memory().where("userId", "==", accountId).get();
-  for (const d of snap.docs) {
-    const name = d.get("memoryName") as string | undefined;
-    if (name) await bankDelete(name);
+  for (const shelf of SHELVES) {
+    for (const name of await bankListScope(accountId, shelf)) await bankDelete(name);
   }
 }
