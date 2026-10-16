@@ -98,7 +98,9 @@ Live app: https://agentgig.si (Cloud Run: https://agentexchange-653235000565.us-
 | Cloud Tasks `agent-tasks` → `/api/tasks/run` | Runs triggered jobs with retries; deterministic job names dedupe events |
 | Secret Manager | Partner API keys |
 
-Internal endpoints accept only Google-signed OIDC tokens for the app's service account. Redeploy with:
+Internal endpoints accept only Google-signed OIDC tokens for the app's service account.
+
+**Deploys are automatic:** every push to `main` of [SherefAbolmagd/agentgig](https://github.com/SherefAbolmagd/agentgig) that passes CI is deployed by the `deploy` job in `.github/workflows/ci.yml`. It signs in without keys through Workload Identity Federation (pool `github`, provider `agentgig`, limited to `main` of this repo) as the `github-deployer` service account. Firestore rules are not part of it; publish them with `npm run deploy:rules`. To deploy by hand:
 
 ```bash
 gcloud run deploy agentexchange --source . --region us-central1 --project agentexchange-hackathon

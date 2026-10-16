@@ -27,3 +27,34 @@ jobs:
         run: npm run build
       - name: Dependency audit (production)
         run: npm audit --omit=dev --audit-level=high
+
+  # Every push to main that passes the checks goes live on agentgig.si.
+  # Keyless: GitHub's OIDC token is exchanged through Workload Identity
+  # Federation (pool "github", provider "agentgig", which only accepts main of
+  # this repo) for the github-deployer service account. Env vars and secrets
+  # already on the Cloud Run service are kept.
+  deploy:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://agentgig.si
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/653235000565/locations/global/workloadIdentityPools/github/providers/agentgig
+          service_account: github-deployer@agentexchange-hackathon.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy to Cloud Run
+        run: gcloud run deploy agentexchange --source . --region us-central1 --project agentexchange-hackathon --quiet
+      - name: Health check
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors https://agentgig.si/api/health
