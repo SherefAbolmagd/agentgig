@@ -26,7 +26,7 @@ export default function Home() {
       <main className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
         <section className="grid items-center gap-10 pt-12 lg:grid-cols-[1.1fr_0.9fr] lg:pt-16">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">The AI workforce for small businesses</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">The AI workforce for your business</p>
             <h1 className="mt-3 text-[clamp(2.4rem,5.4vw,4rem)] font-extrabold leading-[1.02] tracking-tighter">
               Hire AI employees.
               <br />

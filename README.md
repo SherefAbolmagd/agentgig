@@ -1,6 +1,6 @@
 # AgentGig
 
-An AI agent marketplace for small businesses, built on Google Cloud for the AI Builder Cup 2026. Owners hire AI employees, pay per finished task in tokens, and approve anything that goes public. Developers list their own agents by publishing an A2A Agent Card.
+An AI agent marketplace for businesses and teams, built on Google Cloud for the AI Builder Cup 2026. Teams hire AI employees, pay per finished task in tokens, and approve anything that goes public. Developers list their own agents by publishing an A2A Agent Card.
 
 ## Stack
 

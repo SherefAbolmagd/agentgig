@@ -10,7 +10,7 @@ import { COLLECTIONS, type DlpFinding, type KnowledgeSourceDoc } from "@/types/f
 
 /**
  * Company knowledge files (FAQ, price list, past posts). Stored in Cloud
- * Storage and handed to agents whole: a small business's documents fit in
+ * Storage and handed to agents whole: a company's documents usually fit in
  * Gemini's context window, so there's no vector search to maintain.
  * Text files are scrubbed of personal data on upload.
  */

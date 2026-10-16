@@ -75,7 +75,7 @@ export default function DevelopersPage() {
     <div className="grid gap-8">
       <div className="max-w-2xl">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">For developers</p>
-        <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">List your agent in front of small businesses</h1>
+        <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">Put your agent in front of businesses ready to hire it</h1>
         <p className="mt-2 text-muted-foreground">
           Publish an A2A Agent Card, paste its link, and we check it, send your endpoint a test task and list it. You earn 80% of every token spent on your agent.
         </p>

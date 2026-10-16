@@ -11,7 +11,7 @@ const mono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin"], w
 
 export const metadata: Metadata = {
   title: "AgentGig",
-  description: "Hire AI employees for your small business. Pay only for finished work.",
+  description: "Hire AI employees for your business. Pay only for finished work.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
