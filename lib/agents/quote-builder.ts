@@ -138,7 +138,13 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
   approval(o) {
     return {
       title: `Quote ${o.reference} ready: ${o.currency} ${o.total.toFixed(2)} inc. VAT`,
-      preview: o.estimatedLines ? `${o.estimatedLines} line${o.estimatedLines > 1 ? "s are" : " is"} estimated, not from your price list. Check before sending.` : o.lines.map((l) => l.description).slice(0, 3).join(", "),
+      preview: [
+        ...o.lines.map((l) => `${l.quantity} × ${l.description}: ${o.currency} ${l.amount.toFixed(2)}${l.fromPriceList ? "" : " (estimated)"}`),
+        `VAT ${o.vatRate}%: ${o.currency} ${o.vat.toFixed(2)}`,
+        o.estimatedLines ? `${o.estimatedLines} line${o.estimatedLines > 1 ? "s are" : " is"} estimated, not from your price list. Check before sending.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
       severity: o.estimatedLines ? "check" : "info",
       actions: [
         { id: "approve", label: "Save as email draft", kind: "approve" },

@@ -62,7 +62,7 @@ export async function ensureUser(caller: Caller): Promise<{ user: UserDoc; creat
 }
 
 /** A few facts so the sandbox's Memory page and first tasks show sharing at work. */
-async function seedDemoMemory(accountId: string, now = new Date()) {
+export async function seedDemoMemory(accountId: string, now = new Date()) {
   // Next Friday (or the one after, if today is Friday), in words and as an expiry.
   const friday = new Date(now);
   friday.setUTCDate(now.getUTCDate() + (((5 - now.getUTCDay() + 7) % 7) || 7));

@@ -50,10 +50,12 @@ const hoursBetween = (start: string, end: string) => {
   return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60);
 };
 
-const ModelOutput = z.object({
-  assignments: z.array(z.object({ day: z.enum(DAYS), shift: z.string(), staff: z.array(z.string()) })),
-  notes: z.string().describe("One or two sentences on trade-offs you made"),
-});
+/** Shift names are an enum so every assignment matches a shift exactly. */
+const modelOutput = (shiftNames: [string, ...string[]]) =>
+  z.object({
+    assignments: z.array(z.object({ day: z.enum(DAYS), shift: z.enum(shiftNames), staff: z.array(z.string()) })),
+    notes: z.string().describe("One or two sentences on trade-offs you made"),
+  });
 
 export type RotaOutput = {
   weekStarting: string;
@@ -98,10 +100,11 @@ export const rotaBuilder = defineAgent<RotaInput, RotaOutput>({
 
   async run({ input, grounding }) {
     const staff = parseStaffCsv(input.staffCsv);
+    const longestShift = Math.max(...input.shifts.map((s) => hoursBetween(s.start, s.end))) || 1;
     const res = await generateJson({
       tier: "flash",
       system:
-        "You build fair weekly staff rotas. Every open day and shift needs at least the minimum staff. Never schedule anyone on a day they're unavailable or past their maximum hours. Spread hours fairly. Use staff names exactly as given.",
+        "You build fair weekly staff rotas. Return one assignment for every open day and shift; each needs at least the minimum staff. Never schedule anyone on a day they're unavailable or past their maximum hours. Spread hours fairly. Use staff names exactly as given.",
       parts: [
         textPart(
           [
@@ -109,11 +112,13 @@ export const rotaBuilder = defineAgent<RotaInput, RotaOutput>({
             `Week starting ${input.weekStarting}. Open: ${input.openDays.join(", ")}.`,
             `Shifts: ${input.shifts.map((s) => `${s.name} ${s.start}–${s.end} (${hoursBetween(s.start, s.end)}h)`).join("; ")}. Minimum ${input.minStaffPerShift} per shift.`,
             "Staff:",
-            ...staff.map((s) => `- ${s.name} (${s.role}), max ${s.maxHours}h${s.unavailable.length ? `, unavailable ${s.unavailable.join(" ")}` : ""}`),
+            // Models count shifts better than hours, so each person's limit is given as shifts too.
+            ...staff.map((s) => `- ${s.name} (${s.role}), max ${s.maxHours}h = at most ${Math.floor(s.maxHours / longestShift)} shifts${s.unavailable.length ? `, unavailable ${s.unavailable.join(" ")}` : ""}`),
+            `Put exactly ${input.minStaffPerShift} people on each shift; add a person only if everyone stays within their maximum.`,
           ].join("\n"),
         ),
       ],
-      schema: ModelOutput,
+      schema: modelOutput(input.shifts.map((s) => s.name) as [string, ...string[]]),
       temperature: 0.2,
       thinkingBudget: 1024,
     });

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { z } from "zod";
 import { escapeHtml } from "@/lib/telegram/api";
 import { isLinkCode } from "@/lib/telegram/link";
-import { describeInput, profileLines, toContents } from "@/lib/telegram/supervisor";
+import { describeInput, finalReply, profileLines, toContents } from "@/lib/telegram/supervisor";
 import { verifyTelegramSecret } from "@/lib/telegram/webhook";
 
 test("link codes accept only Telegram's start-parameter alphabet and a sensible length", () => {
@@ -41,8 +41,19 @@ test("chat history keeps who said what, with agents named", () => {
     { role: "agent", agentName: "Invoice Chaser", text: "Draft ready" },
     { role: "supervisor", text: "On it." },
   ]);
-  assert.deepEqual(contents.map((c) => c.role), ["user", "model", "model"]);
-  assert.equal(contents[1].parts?.[0].text, "[Invoice Chaser posted] Draft ready");
+  // Agents' posts sit on the user side, so the model never sees itself writing them.
+  assert.deepEqual(contents.map((c) => c.role), ["user", "user", "model"]);
+  assert.equal(contents[1].parts?.[0].text, "(Chat note: Invoice Chaser posted this result in the chat) Draft ready");
+});
+
+test("after an agent posts, Ada can't restate or invent its result", () => {
+  const posted = [{ name: "delegate", result: { status: "awaiting_approval", alreadyPostedInChat: true } }];
+  assert.equal(finalReply("Want me to remember Hannah's office?", posted), "Want me to remember Hannah's office?");
+  assert.equal(finalReply("[Quote Builder posted] Draft for approval: £330", posted), "");
+  assert.equal(finalReply("Here it is:\n\nTotal £330", posted), "");
+  assert.equal(finalReply("x".repeat(400), posted), "");
+  // Without a posted result (a question, a failed delegate) she speaks freely.
+  assert.equal(finalReply("x".repeat(400), [{ name: "delegate", result: { error: "missing input" } }]).length, 400);
 });
 
 test("text sent to Telegram can't inject HTML", () => {

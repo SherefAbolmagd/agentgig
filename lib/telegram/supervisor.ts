@@ -45,12 +45,30 @@ async function history(p: LinkedPerson): Promise<ChatTurn[]> {
   return snap.docs.map((d) => d.data() as ChatTurn).reverse();
 }
 
-/** Earlier turns as Gemini contents; agents' posts are shown as the supervisor's side of the chat. */
+/**
+ * Earlier turns as Gemini contents. Agents' posts go on the user side as a
+ * note: shown as the supervisor's own words, the model learned to write fake
+ * agent results itself.
+ */
 export function toContents(turns: ChatTurn[]): Content[] {
   return turns.map((t) => ({
-    role: t.role === "person" ? "user" : "model",
-    parts: [{ text: t.role === "agent" ? `[${t.agentName} posted] ${t.text}` : t.text }],
+    role: t.role === "supervisor" ? "model" : "user",
+    parts: [{ text: t.role === "agent" ? `(Chat note: ${t.agentName} posted this result in the chat) ${t.text}` : t.text }],
   }));
+}
+
+const AFTER_POST_MAX = 280;
+
+/**
+ * The supervisor's closing words. Once an agent has posted its result, only a
+ * short plain follow-up gets through: anything long, or dressed up as another
+ * post, would be the model restating (or inventing) the agent's work.
+ */
+export function finalReply(text: string, calls: { name: string; result: unknown }[]): string {
+  const posted = calls.some((c) => c.name === "delegate" && (c.result as { alreadyPostedInChat?: boolean } | null)?.alreadyPostedInChat);
+  if (!posted) return text;
+  if (text.length > AFTER_POST_MAX || /^[[(]/.test(text) || /\n\s*\n/.test(text)) return "";
+  return text;
 }
 
 const FOLD_OVER = 280;
@@ -149,11 +167,12 @@ function systemPrompt(account: UserDoc, person: LinkedPerson, team: TeamMember[]
     "How you work:",
     "- Hand work to the right agent with delegate. Never do an agent's job yourself and never invent results, numbers or customer details.",
     "- Fill inputs from the business profile above, the conversation and company memory (e.g. a website or audience input comes from the profile); use defaults when sensible. Only ask when something required is in none of these, and then ask one short question.",
-    "- After delegate, the agent posts its own result in the chat. Then reply with one short sentence at most, or nothing if there's nothing to add.",
+    "- After delegate, the agent has already posted its full result in the chat, with buttons if it needs an OK. Don't announce, repeat or summarise it, and never say an agent is still working on it. Usually reply with nothing; add one short sentence only for a useful next step.",
     "- Asked about the business (customers, stock, payment habits), check company_memory before saying you don't know.",
     "- If they tell you something the whole team should know, save it with remember (pick the best shelf; give an expiry date for temporary facts).",
     "- If no hired agent can do something, say so and name the kind of agent they could hire.",
-    "- Call agents by their names (\"Quote Builder\"), never by their ids.",
+    "- Call agents by their names (\"Quote Builder\", not \"the Quote Builder\"), never by their ids.",
+    "- Questions about tokens, spending, costs or the balance: use status and answer with the numbers.",
     "- Write like a capable colleague texting: short, warm, plain sentences, no markdown, no emoji. Use the person's language.",
   ]
     .filter((l) => l !== "")
@@ -210,7 +229,7 @@ const TOOLS: FunctionDeclaration[] = [
     description: "Facts the team has saved, newest first. Use to answer questions about customers, stock, money, brand or staff.",
     parameters: { type: Type.OBJECT, properties: { shelf: { type: Type.STRING, enum: [...SHELVES] } } },
   },
-  { name: "status", description: "Token balance and the team's recent tasks.", parameters: { type: Type.OBJECT, properties: {} } },
+  { name: "status", description: "Token balance, tokens spent today and the team's recent tasks with what each cost.", parameters: { type: Type.OBJECT, properties: {} } },
 ];
 
 interface ToolContext {
@@ -259,13 +278,20 @@ async function runTool(ctx: ToolContext, name: string, args: Record<string, unkn
         .map((m) => `[${m.shelf}] ${m.fact}`);
     }
     case "status": {
-      const tasks = await db().collection(COLLECTIONS.tasks).where("userId", "==", person.accountId).orderBy("createdAt", "desc").limit(8).get();
+      const tasks = await db().collection(COLLECTIONS.tasks).where("userId", "==", person.accountId).orderBy("createdAt", "desc").limit(30).get();
+      const names = new Map(ctx.team.map((t) => [t.agent.slug, t.agent.name]));
+      const startOfDay = new Date().setHours(0, 0, 0, 0);
+      const recent = tasks.docs.map((d) => d.data() as TaskDoc);
       return {
         tokenBalance: ctx.account.tokenBalance,
-        recentTasks: tasks.docs.map((d) => {
-          const t = d.data() as TaskDoc;
-          return { agent: t.agentId, status: t.status, at: t.createdAt?.toDate().toISOString() };
-        }),
+        tokensSpentToday: recent.filter((t) => t.settlement === "charged" && (t.createdAt?.toMillis() ?? 0) >= startOfDay).reduce((n, t) => n + t.cost, 0),
+        note: "Tokens are charged only for finished work; failed tasks are free.",
+        recentTasks: recent.slice(0, 12).map((t) => ({
+          agent: names.get(t.agentId) ?? t.agentId,
+          status: t.status,
+          tokens: t.settlement === "charged" ? t.cost : 0,
+          at: t.createdAt?.toDate().toISOString(),
+        })),
       };
     }
     default:
@@ -292,7 +318,7 @@ async function delegate(ctx: ToolContext, agentId: string, input: Record<string,
     });
     ctx.live?.stop();
     await postResult(person, member, res.taskId, res.status, res.output, res.approvalId, res.delivery?.summary as string | undefined);
-    return { status: res.status, tokensCharged: res.tokensCharged, balance: res.balance, posted: true };
+    return { status: res.status, tokensCharged: res.tokensCharged, balance: res.balance, alreadyPostedInChat: true };
   } catch (err) {
     if (isGatewayError(err)) return { error: err.message, ...(err.details?.issues ? { missing: err.details.issues } : {}) };
     throw err;
@@ -345,12 +371,13 @@ export async function handlePersonMessage(person: LinkedPerson, message: { text?
   await saveTurn(person, { role: "person", text: message.text ?? "[voice note]" });
 
   const ctx: ToolContext = { person, account, team, live };
-  const { text } = await generateWithTools({
+  const reply = await generateWithTools({
     system: systemPrompt(account, person, team, openApprovals.data().count),
     contents: [...toContents(turns), { role: "user", parts }],
     tools: TOOLS,
     run: (name, args) => runTool(ctx, name, args),
   });
+  const text = finalReply(reply.text, reply.calls);
   live?.stop();
   if (text) {
     await post(person.link.chatId, SUPERVISOR_NAME, text);

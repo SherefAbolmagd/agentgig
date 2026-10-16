@@ -53,7 +53,7 @@ export const reviewPulse = defineAgent<ReviewInput, ReviewOutput>({
   approval(o) {
     return {
       title: o.urgent ? `${o.rating}-star review needs attention` : `Reply ready for a ${o.rating}-star review`,
-      preview: o.urgent ? o.internalNote : `“${o.reply.slice(0, 140)}”`,
+      preview: o.urgent ? `“${o.reply}”\n\nTo fix: ${o.internalNote}` : `“${o.reply}”`,
       severity: o.urgent ? "check" : "info",
       actions: [
         { id: "approve", label: "Approve reply", kind: "approve" },

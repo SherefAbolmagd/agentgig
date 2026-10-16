@@ -17,6 +17,8 @@
     "telegram:setup": "tsx scripts/telegram-setup.ts",
     "e2e": "tsx scripts/e2e.ts",
     "test:ops": "tsx --conditions=react-server scripts/test-ops.ts",
+    "video:reset": "tsx --conditions=react-server scripts/video-reset.ts",
+    "video:rehearse": "tsx --conditions=react-server scripts/video-rehearse.ts",
     "verify": "npm run typecheck && npm run lint && npm test",
     "push:secrets": "tsx scripts/push-secrets.ts"
   },
