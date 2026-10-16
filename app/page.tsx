@@ -5,10 +5,29 @@ import { DayTimeline } from "@/components/home/day-timeline";
 import { DemoButton } from "@/components/home/demo-button";
 import { LiveFeed } from "@/components/home/live-feed";
 import { Button } from "@/components/ui/button";
+import { SITE } from "@/lib/site";
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "Organization", "@id": `${SITE.url}/#org`, name: SITE.name, url: SITE.url, logo: `${SITE.url}/apple-icon.png` },
+    { "@type": "WebSite", "@id": `${SITE.url}/#site`, name: SITE.name, url: SITE.url, publisher: { "@id": `${SITE.url}/#org` } },
+    {
+      "@type": "SoftwareApplication",
+      name: SITE.name,
+      url: SITE.url,
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      description: SITE.description,
+      publisher: { "@id": `${SITE.url}/#org` },
+    },
+  ],
+};
 
 export default function Home() {
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
           <Logo />
