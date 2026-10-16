@@ -59,8 +59,7 @@ test("Ada sees the whole business profile, so she doesn't ask for the website", 
       avoidWords: ["artisanal"],
       website: "https://hearthandcrumb.example",
     },
-  }).join("
-");
+  }).join("\n");
   assert.match(lines, /Website: https:\/\/hearthandcrumb\.example/);
   assert.match(lines, /Customers: Office managers/);
   assert.match(lines, /Never use: artisanal/);
