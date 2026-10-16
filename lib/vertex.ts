@@ -1,5 +1,5 @@
 import "server-only";
-import { ApiError, GoogleGenAI, type Part } from "@google/genai";
+import { ApiError, GoogleGenAI, type Content, type FunctionDeclaration, type Part } from "@google/genai";
 import { z } from "zod";
 import { env } from "./env";
 import { GatewayError } from "./errors";
@@ -119,6 +119,67 @@ export async function generateJson<S extends z.ZodType>(opts: GenerateJsonOption
       });
     }
   }
+}
+
+export interface ToolCallLog {
+  name: string;
+  args: Record<string, unknown>;
+  result: unknown;
+}
+
+/**
+ * A chat turn with function calling: Gemini may call `tools` (up to
+ * `maxSteps` rounds), `run` executes each call, and the final text is
+ * returned. Used by the Telegram supervisor.
+ */
+export async function generateWithTools(opts: {
+  system: string;
+  contents: Content[];
+  tools: FunctionDeclaration[];
+  run(name: string, args: Record<string, unknown>): Promise<unknown>;
+  tier?: ModelTier;
+  maxSteps?: number;
+}): Promise<{ text: string; calls: ToolCallLog[] }> {
+  const model = modelFor(opts.tier ?? "flash");
+  const contents = [...opts.contents];
+  const calls: ToolCallLog[] = [];
+  for (let step = 0; step < (opts.maxSteps ?? 6); step++) {
+    let res;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        res = await genai().models.generateContent({
+          model,
+          contents,
+          config: { systemInstruction: opts.system, temperature: 0.3, tools: [{ functionDeclarations: opts.tools }], abortSignal: AbortSignal.timeout(60_000) },
+        });
+        break;
+      } catch (err) {
+        if (err instanceof ApiError && RETRYABLE.has(err.status) && attempt < MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+          continue;
+        }
+        throw new GatewayError("AGENT_FAILED", "The supervisor couldn't think that through. Try again.", { cause: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    const fnCalls = res.functionCalls ?? [];
+    if (!fnCalls.length) return { text: (res.text ?? "").trim(), calls };
+    const modelTurn = res.candidates?.[0]?.content;
+    if (modelTurn) contents.push(modelTurn);
+    const responses: Part[] = [];
+    for (const call of fnCalls) {
+      const args = (call.args ?? {}) as Record<string, unknown>;
+      let result: unknown;
+      try {
+        result = await opts.run(call.name ?? "", args);
+      } catch (err) {
+        result = { error: err instanceof Error ? err.message : String(err) };
+      }
+      calls.push({ name: call.name ?? "", args, result });
+      responses.push({ functionResponse: { id: call.id, name: call.name, response: { result } } });
+    }
+    contents.push({ role: "user", parts: responses });
+  }
+  return { text: "", calls };
 }
 
 /**

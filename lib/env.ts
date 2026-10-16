@@ -32,6 +32,11 @@ const ServerEnvSchema = z.object({
    * in Firestore only (recent facts instead of search by meaning).
    */
   MEMORY_ENGINE: z.string().regex(/^projects\/[^/]+\/locations\/[^/]+\/reasoningEngines\/[^/]+$/).optional(),
+  /** The shared AgentGig Telegram bot (from BotFather). All three are needed for Telegram. */
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_BOT_USERNAME: z.string().optional(),
+  /** Sent by Telegram with every webhook call (setWebhook secret_token). */
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
   TASKS_QUEUE: z.string().default("agent-tasks"),
   TASKS_LOCATION: z.string().default("us-central1"),
   TASKS_SERVICE_ACCOUNT: z.string().optional(),

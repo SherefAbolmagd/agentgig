@@ -8,6 +8,7 @@ import { log as writeLog } from "./log";
 import { db } from "./firebase-admin";
 import { runTask } from "./gateway/pipeline";
 import { rememberTask, syncToBank } from "./memory";
+import { runTelegramJob, type TelegramJob } from "./telegram/webhook";
 import { driveDownload, driveListInvoices } from "./connectors/google";
 import { linkedinPost } from "./connectors/linkedin";
 import { isGatewayError } from "./errors";
@@ -37,6 +38,8 @@ export interface Job {
   rememberTaskId?: string;
   /** Copy the account's Firestore-only facts into Memory Bank (new sandboxes). */
   syncMemory?: true;
+  /** A Telegram message or button tap for the supervisor. */
+  telegram?: TelegramJob;
 }
 
 let tasksClient: CloudTasksClient | undefined;
@@ -83,6 +86,7 @@ export async function runJob(job: Job): Promise<{ status: string }> {
   log("job.start", { key: job.key, agentId: job.agentId, origin: job.origin, file: job.gcsFile?.name ?? job.driveFile?.name });
   if (job.publishTaskId) return publishTask(job.publishTaskId, job.userId);
   if (job.rememberTaskId) return rememberJob(job.rememberTaskId);
+  if (job.telegram) return { status: await runTelegramJob(job.telegram) };
   if (job.syncMemory) {
     const moved = await syncToBank(job.userId);
     log("job.memory_synced", { key: job.key, moved });

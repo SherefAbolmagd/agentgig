@@ -14,6 +14,7 @@
     "smoke": "tsx scripts/smoke.ts",
     "deploy:rules": "tsx scripts/deploy-rules.ts",
     "memory:create": "tsx scripts/create-memory-engine.ts",
+    "telegram:setup": "tsx scripts/telegram-setup.ts",
     "e2e": "tsx scripts/e2e.ts",
     "test:ops": "tsx --conditions=react-server scripts/test-ops.ts",
     "verify": "npm run typecheck && npm run lint && npm test",

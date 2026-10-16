@@ -25,6 +25,14 @@ export const COLLECTIONS = {
   invites: "invites",
   /** Company memory: facts agents (and people) share across the organization. */
   memory: "memory",
+  /** telegram_links/{uid}: a team member's linked Telegram account. */
+  telegramLinks: "telegram_links",
+  /** One-time link tokens, by SHA-256 of the token. Server-only. */
+  telegramTokens: "telegram_link_tokens",
+  /** Telegram update IDs already handled (Telegram retries). Server-only. */
+  telegramUpdates: "telegram_updates",
+  /** telegram_chats/{accountId}_{uid}/messages: each person's conversation with the supervisor. Server-only. */
+  telegramChats: "telegram_chats",
 } as const;
 
 export type ToolProvider =
@@ -128,6 +136,21 @@ export interface InviteDoc {
   usedBy?: string;
   expiresAt: Ts;
   createdAt: Ts;
+}
+
+/* ---------- telegram_links/{uid} ---------- */
+
+/** One per team member who linked Telegram. One Telegram account links to one person. */
+export interface TelegramLinkDoc {
+  accountId: string;
+  uid: string;
+  telegramUserId: number;
+  chatId: number;
+  username: string | null;
+  firstName: string;
+  linkedAt: Ts;
+  /** Set after tapping Edit on a draft: the next message becomes the new text. */
+  pendingEdit?: { approvalId: string; at: Ts } | null;
 }
 
 /* ---------- memory/{id} ---------- */
@@ -279,6 +302,8 @@ export interface TaskDoc {
   origin: "manual" | "schedule" | "event" | "a2a";
   /** The team member who started a manual task. */
   requestedBy?: string;
+  /** Started from Telegram: results are posted back to this chat. */
+  telegramChatId?: number;
   status: TaskStatus;
   cost: number;
   /** Set once by lib/ledger.ts settleTask; makes settling idempotent. */

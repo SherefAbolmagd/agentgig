@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Link2, Loader2, LogOut, Trash2 } from "lucide-react";
+import { Copy, Link2, Loader2, LogOut, MessageCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ShelfBadge } from "@/components/memory/shelf-badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, ApiError } from "@/lib/client/api";
 import { useAuth } from "@/lib/client/auth";
-import { useMe, useMembers, useOpenInvites } from "@/lib/client/firestore";
+import { useMe, useMembers, useOpenInvites, useTelegramLinks } from "@/lib/client/firestore";
 import { toDate, when } from "@/lib/client/format";
 import { DEFAULT_MEMORY_SETTINGS } from "@/lib/shelves";
 import { SHELVES, type Role, type Shelf } from "@/types/firestore";
@@ -54,6 +54,7 @@ export default function TeamPage() {
           {!isOwner && role && <LeaveTeam />}
         </div>
         <div className="grid gap-6">
+          {role && <TelegramCard />}
           {canInvite && (user?.isAnonymous ? <DemoNote /> : <Invites isOwner={isOwner} />)}
           {isOwner && <MemorySettings key={JSON.stringify(me.data?.memory ?? null)} />}
         </div>
@@ -227,6 +228,73 @@ function Invites({ isOwner }: { isOwner: boolean }) {
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  );
+}
+
+function TelegramCard() {
+  const { user } = useAuth();
+  const links = useTelegramLinks();
+  const members = useMembers();
+  const me = useMe();
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const mine = links.data.find((l) => l.uid === user?.uid);
+  const names = Object.fromEntries([[me.data?.id ?? "", me.data?.displayName ?? "Owner"], ...members.data.map((m) => [m.id, m.displayName])]);
+
+  async function connect() {
+    setBusy(true);
+    const res = (await call("/api/telegram/link", {})) as { url: string; expiresAt: string } | null;
+    setBusy(false);
+    if (res) {
+      setLink(res);
+      window.open(res.url, "_blank", "noopener");
+    }
+  }
+  async function disconnect() {
+    setBusy(true);
+    await call("/api/telegram/link", { method: "DELETE" }, "Telegram disconnected.");
+    setBusy(false);
+  }
+
+  return (
+    <section className="grid gap-3 rounded-xl border bg-card p-5">
+      <div>
+        <h2 className="font-display text-lg font-bold">Telegram</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Message your team lead, Ada, from Telegram. She hands each request to the right agent and brings back results. Everyone connects their own
+          Telegram and keeps their own role.
+        </p>
+      </div>
+      {user?.isAnonymous ? (
+        <p className="text-sm text-muted-foreground">Demo sandboxes can&apos;t connect Telegram. Create a free account to try it.</p>
+      ) : mine ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">
+          <span>
+            Connected as <b>{mine.username ? `@${mine.username}` : mine.firstName}</b>
+          </span>
+          <Button size="sm" variant="ghost" onClick={disconnect} disabled={busy}>
+            Disconnect
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          <Button onClick={connect} disabled={busy}>
+            {busy ? <Loader2 className="animate-spin" /> : <MessageCircle />} Connect my Telegram
+          </Button>
+          {link && (
+            <p className="text-xs text-muted-foreground">
+              Telegram didn&apos;t open? Open this link on your phone. It works once, for 10 minutes:{" "}
+              <span className="break-all font-mono text-foreground">{link.url}</span>
+            </p>
+          )}
+        </div>
+      )}
+      {links.data.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          On Telegram: {links.data.map((l) => names[l.uid] ?? l.firstName).join(", ")}
+        </p>
       )}
     </section>
   );

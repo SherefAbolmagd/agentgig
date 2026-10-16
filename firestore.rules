@@ -43,6 +43,9 @@ service cloud.firestore {
     match /approvals/{id}          { allow read: if owns(resource.data); }
     match /knowledge_sources/{id}  { allow read: if owns(resource.data); }
     match /memory/{id}             { allow read: if owns(resource.data); }
+    // Who on the team has linked Telegram (the Team page). Codes, chats and
+    // update IDs stay server-only.
+    match /telegram_links/{uid}    { allow read: if signedIn() && resource.data.accountId == acct(); }
 
     match /{document=**} {
       allow write: if false;

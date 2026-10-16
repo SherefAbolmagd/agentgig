@@ -22,6 +22,7 @@ import {
   type KnowledgeSourceDoc,
   type MembershipDoc,
   type MemoryDoc,
+  type TelegramLinkDoc,
   type TaskDoc,
   type TokenTransactionDoc,
   type UserDoc,
@@ -156,4 +157,9 @@ export function useMembers() {
 export function useOpenInvites() {
   const uid = useUid();
   return useLiveQuery<InviteDoc>(uid && COLLECTIONS.invites, [where("accountId", "==", uid), where("status", "==", "open")], `invites:${uid}`);
+}
+
+export function useTelegramLinks() {
+  const uid = useUid();
+  return useLiveQuery<TelegramLinkDoc>(uid && COLLECTIONS.telegramLinks, [where("accountId", "==", uid)], `telegram:${uid}`);
 }

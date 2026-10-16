@@ -83,6 +83,17 @@ Agents share what they learn through **company memory** (`lib/memory`), split in
 
 Facts live in Firestore `memory/{id}`. With `MEMORY_ENGINE` set, Vertex AI Agent Engine Memory Bank also stores them under the scope `{ account_id, shelf }`, finds the relevant ones for each task by meaning, and merges updates with existing facts. Firestore mirrors it under the same IDs.
 
+## Telegram
+
+Every team member can talk to their organization's team lead, **Ada**, from Telegram through one shared AgentGig bot (`lib/telegram`).
+
+- **Linking:** Team page → Connect my Telegram makes a one-time `t.me/<bot>?start=<code>` link (10 minutes; only its SHA-256 is stored). The webhook redeems it for whoever sends `/start <code>` and writes `telegram_links/{uid}`.
+- **Who's talking:** every update must carry the webhook secret, is handled once (`telegram_updates`), must come from a private chat, and its sender's Telegram ID must map to a link whose person is still on that team. Strangers get a generic reply that says nothing about any business.
+- **Ada** is one stateless Gemini call per message with function calling (`delegate`, `approvals`, `decide_approval`, `remember`, `company_memory`, `status`). Her instructions, history (`telegram_chats/{accountId}_{uid}`) and tools come from the sender's own account; the account ID is never a model argument. Delegated work runs through the normal gateway, and the agent posts its result under its own name.
+- **Roles still apply:** members give tasks and ask questions; owners and managers also approve (inline buttons) and add memory. Drafts made anywhere are sent to linked owners and managers with Approve / Edit / Skip.
+
+Setup: create the bot with @BotFather, put `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` and a random `TELEGRAM_WEBHOOK_SECRET` in `.env.local` and on Cloud Run, then `npm run telegram:setup`.
+
 ## Deployment (Google Cloud project `agentexchange-hackathon`)
 
 Live app: https://agentgig.si (Cloud Run: https://agentexchange-653235000565.us-central1.run.app)

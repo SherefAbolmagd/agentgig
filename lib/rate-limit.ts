@@ -26,6 +26,12 @@ export const LIMITS = {
   uploadsPerUser: { limit: 40, windowSec: 3600 },
   /** Agent registrations per developer (each sends a test task). */
   registrationsPerUser: { limit: 10, windowSec: 3600 },
+  /** Telegram messages per linked person. */
+  telegramPerUser: { limit: 60, windowSec: 600 },
+  /** Replies to Telegram users who aren't linked, per Telegram account. */
+  telegramStranger: { limit: 5, windowSec: 3600 },
+  /** Telegram link codes per person. */
+  telegramLinkCodes: { limit: 10, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -37,6 +43,9 @@ const MESSAGES: Record<LimitName, string> = {
   topupsPerUser: "You've reached today's limit for demo top-ups.",
   uploadsPerUser: "Too many uploads in the last hour. Try again later.",
   registrationsPerUser: "Too many registration attempts. Try again in an hour.",
+  telegramPerUser: "You're sending messages faster than your team can keep up. Give it a few minutes.",
+  telegramStranger: "Too many messages.",
+  telegramLinkCodes: "Too many Telegram links created. Try again in an hour.",
 };
 
 /** Counts one use of `name` for `subject`; throws RATE_LIMITED when over the limit. */

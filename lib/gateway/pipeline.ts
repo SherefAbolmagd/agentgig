@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase-admin";
 import { reserveTokens, settleTask } from "@/lib/ledger";
 import { log as logLine } from "@/lib/log";
 import { enqueue } from "@/lib/triggers";
+import { notifyApproval } from "@/lib/telegram/notify";
 import {
   COLLECTIONS,
   type AgentDoc,
@@ -37,6 +38,8 @@ export interface RunTaskRequest {
   origin: TaskDoc["origin"];
   /** Team member who started a manual task. */
   requestedBy?: string;
+  /** Started from Telegram: the supervisor posts the result to this chat itself. */
+  telegramChatId?: number;
   idempotencyKey?: string;
 }
 
@@ -140,6 +143,8 @@ export async function runTask(req: RunTaskRequest): Promise<RunTaskResult> {
       .add({ ...draft, editField: handler.editableField ?? null, userId: req.userId, taskId, agentId: agent.slug, status: "open", createdAt: FieldValue.serverTimestamp() });
     await taskRef.update({ status: "awaiting_approval", output, finishedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     await log("deliver", "ok", `Charged ${agent.tokensPerTask} tokens · draft sent to your approval inbox`);
+    // Owners and managers on Telegram get it with buttons; whoever asked from Telegram already has it.
+    await notifyApproval(req.userId, approvalRef.id, req.telegramChatId ? req.requestedBy : undefined);
     return { taskId, status: "awaiting_approval", output, dlpFindings, tokensCharged: agent.tokensPerTask, balance, approvalId: approvalRef.id };
   }
 

@@ -18,6 +18,19 @@ const Job = z.object({
   publishTaskId: z.string().optional(),
   rememberTaskId: z.string().optional(),
   syncMemory: z.literal(true).optional(),
+  telegram: z
+    .object({
+      updateId: z.number().int(),
+      telegramUserId: z.number().int(),
+      chatId: z.number().int(),
+      kind: z.enum(["message", "callback"]),
+      text: z.string().max(5000).optional(),
+      voiceFileId: z.string().max(300).optional(),
+      callbackId: z.string().max(100).optional(),
+      callbackData: z.string().max(64).optional(),
+      messageId: z.number().int().optional(),
+    })
+    .optional(),
 });
 
 /**

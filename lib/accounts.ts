@@ -7,6 +7,7 @@ import { log } from "./log";
 import { settleTask } from "./ledger";
 import { forgetAccountMemory } from "./memory";
 import { deleteMemberships } from "./org";
+import { deleteTelegramData, unlinkTelegram } from "./telegram/link";
 import { COLLECTIONS, type TaskDoc } from "@/types/firestore";
 
 /** Collections holding per-user documents (all keyed by a `userId` field). */
@@ -33,6 +34,8 @@ export async function deleteAccount(uid: string): Promise<{ documents: number; f
   // Memory Bank copies first, while the memory docs still list them.
   await forgetAccountMemory(uid);
   let documents = await deleteMemberships(uid);
+  documents += await deleteTelegramData(uid);
+  if (await unlinkTelegram(uid)) documents++;
   for (const name of USER_COLLECTIONS) {
     for (;;) {
       const snap = await store.collection(name).where("userId", "==", uid).limit(400).get();
