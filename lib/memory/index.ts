@@ -229,29 +229,42 @@ export function expiryFrom(day: string | null | undefined, now = Date.now()): Ti
   return Timestamp.fromMillis(at);
 }
 
+type Item = { fact: string; expiresAt: Timestamp | null };
+
+const savedDoc = (accountId: string, shelf: Shelf, item: Item, source: Source) => ({
+  userId: accountId,
+  shelf,
+  status: "saved" as const,
+  source,
+  expiresAt: item.expiresAt,
+  updatedAt: FieldValue.serverTimestamp(),
+});
+
 /** Stores one fact agents can use from now on. */
-async function saveFact(accountId: string, shelf: Shelf, item: { fact: string; expiresAt: Timestamp | null }, source: Source, extra: Partial<MemoryDoc> = {}) {
-  const base = { userId: accountId, shelf, status: "saved" as const, source, expiresAt: item.expiresAt, updatedAt: FieldValue.serverTimestamp() };
-  if (!bankEnabled()) {
-    await memory().add({ ...base, ...extra, fact: item.fact, createdAt: FieldValue.serverTimestamp() });
-    return;
+async function saveFact(accountId: string, shelf: Shelf, item: Item, source: Source, extra: Partial<MemoryDoc> = {}) {
+  if (bankEnabled()) {
+    try {
+      await saveToBank(accountId, shelf, item, source, extra);
+      return;
+    } catch (err) {
+      // Keep the fact in Firestore; recall still finds it there, and syncToBank can move it later.
+      log("WARNING", "memory.bank_save_failed", { component: "memory", shelf, error: String(err) });
+    }
   }
-  let changes: Awaited<ReturnType<typeof bankGenerate>>;
-  try {
-    changes = await bankGenerate(accountId, shelf, [item.fact]);
-  } catch (err) {
-    // Keep the fact in Firestore; recall still finds it there.
-    log("WARNING", "memory.bank_save_failed", { component: "memory", shelf, error: String(err) });
-    await memory().add({ ...base, ...extra, fact: item.fact, createdAt: FieldValue.serverTimestamp() });
-    return;
-  }
+  await memory().add({ ...savedDoc(accountId, shelf, item, source), ...extra, fact: item.fact, createdAt: FieldValue.serverTimestamp() });
+}
+
+/** Memory Bank merges the fact with the shelf; Firestore mirrors whatever it created, updated or removed. */
+async function saveToBank(accountId: string, shelf: Shelf, item: Item, source: Source, extra: Partial<MemoryDoc>) {
+  const base = savedDoc(accountId, shelf, item, source);
+  const changes = await bankGenerate(accountId, shelf, [item.fact]);
   for (const c of changes) {
     const ref = memory().doc(memoryIdOf(c.name));
     if (c.action === "DELETED") {
       await ref.delete();
       continue;
     }
-    await bankSetExpiry(c.name, item.expiresAt?.toDate() ?? null);
+    await bankSetExpiry(c.name, c.fact, item.expiresAt?.toDate() ?? null);
     await ref.set(
       { ...base, ...extra, fact: c.fact, memoryName: c.name, ...(c.action === "CREATED" && { createdAt: FieldValue.serverTimestamp() }) },
       { merge: true },
@@ -262,6 +275,26 @@ async function saveFact(accountId: string, shelf: Shelf, item: { fact: string; e
 /* ------------------------------------------------------------------ */
 /* Owner actions (Memory page)                                         */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Moves an account's Firestore-only facts (demo seeds, or facts saved while
+ * Memory Bank was down) into Memory Bank so they merge with new ones.
+ */
+export async function syncToBank(accountId: string): Promise<number> {
+  if (!bankEnabled()) return 0;
+  const snap = await memory().where("userId", "==", accountId).get();
+  let moved = 0;
+  for (const d of snap.docs) {
+    const m = d.data() as MemoryDoc;
+    if (m.status !== "saved" || m.memoryName) continue;
+    await saveToBank(accountId, m.shelf, { fact: m.fact, expiresAt: (m.expiresAt as Timestamp | null) ?? null }, m.source, {
+      ...(m.pinned && { pinned: true }),
+    });
+    await d.ref.delete();
+    moved++;
+  }
+  return moved;
+}
 
 export const FactInput = z.object({
   shelf: z.enum(SHELVES),

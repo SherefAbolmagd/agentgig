@@ -92,7 +92,7 @@ Live app: https://agentgig.si (Cloud Run: https://agentexchange-653235000565.us-
 | Cloud Run `agentexchange` | This app (Dockerfile, Next.js standalone), service account `agentexchange-app` |
 | Cloud Run `ledgerline-vat` | Sample partner A2A agent (`partners/ledgerline`), its own service account and API key |
 | Firestore `(default)` | Users, agents, hires, tasks, token ledger, approvals, knowledge |
-| Cloud Storage | `-knowledge` (company files), `-inbox` (invoice inbox, 1-day lifecycle), `-inbox-dev` (local only) |
+| Cloud Storage | `-knowledge` (company files), `-inbox` (invoice inbox, 1-day lifecycle) |
 | Pub/Sub `inbox-events` → push `/api/triggers/inbox` | New inbox files start ReceiptHero |
 | Cloud Scheduler `agent-schedules` → `/api/triggers/cron` | Every 5 minutes; queues scheduled agents that are due |
 | Cloud Tasks `agent-tasks` → `/api/tasks/run` | Runs triggered jobs with retries; deterministic job names dedupe events |
@@ -139,6 +139,6 @@ Rate limits (Firestore counters with TTL): 30 new demo sandboxes per IP per hour
 | Rotate a partner's API key | The developer re-registers with the new key in `/developers`; it's stored as a new secret version |
 | Remove a user's data | They use "Delete my account", or call `deleteAccount(uid)` from `lib/accounts.ts` |
 | Health | `GET /api/health`; an uptime check watches it |
-| Local development | Uses the `agentexchange-dev` database and `-inbox-dev` bucket, never production data |
+| Local development | One environment: `npm run dev` uses the same Firestore `(default)` database, buckets and Memory Bank as production, so local actions change live data. `DEMO_AUTH=true` only ever works locally |
 
-Checks: `npm run verify` (typecheck, lint, unit tests), `npm run test:ledger` and `npm run test:ops` (against the dev database), `npm run e2e` (browser), all run before each deploy.
+Checks: `npm run verify` (typecheck, lint, unit tests), `npm run test:ledger` (makes and removes its own throwaway account), `npm run e2e` (browser), all run before each deploy. `npm run test:ops` runs the cleanup jobs for real, so it refuses the production database; point `FIRESTORE_DATABASE_ID` at a scratch database to run it.

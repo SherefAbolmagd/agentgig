@@ -1,6 +1,8 @@
 /**
  * Integration checks for the operational code, against the Firestore database
- * in .env.local (use the dev database). Creates and removes its own users.
+ * in .env.local. It runs the sandbox cleanup and stuck-task jobs for real, so
+ * it refuses the production database: set FIRESTORE_DATABASE_ID to a scratch
+ * database to run it. Creates and removes its own users.
  *
  *   npm run test:ops
  */

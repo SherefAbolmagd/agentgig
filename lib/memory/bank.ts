@@ -95,9 +95,10 @@ export async function bankGenerate(accountId: string, shelf: Shelf, facts: strin
   );
 }
 
-export async function bankSetExpiry(name: string, expiresAt: Date | null): Promise<void> {
+/** Memory Bank wants the fact in every update, even when only the expiry changes. */
+export async function bankSetExpiry(name: string, fact: string, expiresAt: Date | null): Promise<void> {
   if (!expiresAt) return;
-  await call("PATCH", `${name}?updateMask=expire_time`, { expireTime: expiresAt.toISOString() }).catch((err) =>
+  await call("PATCH", `${name}?updateMask=expire_time`, { fact, expireTime: expiresAt.toISOString() }).catch((err) =>
     log("WARNING", "memory.expiry_failed", { component: "memory", error: String(err) }),
   );
 }

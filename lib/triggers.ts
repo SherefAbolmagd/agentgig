@@ -7,7 +7,7 @@ import { env } from "./env";
 import { log as writeLog } from "./log";
 import { db } from "./firebase-admin";
 import { runTask } from "./gateway/pipeline";
-import { rememberTask } from "./memory";
+import { rememberTask, syncToBank } from "./memory";
 import { driveDownload, driveListInvoices } from "./connectors/google";
 import { linkedinPost } from "./connectors/linkedin";
 import { isGatewayError } from "./errors";
@@ -35,6 +35,8 @@ export interface Job {
   publishTaskId?: string;
   /** Add what a delivered task learned to company memory. */
   rememberTaskId?: string;
+  /** Copy the account's Firestore-only facts into Memory Bank (new sandboxes). */
+  syncMemory?: true;
 }
 
 let tasksClient: CloudTasksClient | undefined;
@@ -81,6 +83,11 @@ export async function runJob(job: Job): Promise<{ status: string }> {
   log("job.start", { key: job.key, agentId: job.agentId, origin: job.origin, file: job.gcsFile?.name ?? job.driveFile?.name });
   if (job.publishTaskId) return publishTask(job.publishTaskId, job.userId);
   if (job.rememberTaskId) return rememberJob(job.rememberTaskId);
+  if (job.syncMemory) {
+    const moved = await syncToBank(job.userId);
+    log("job.memory_synced", { key: job.key, moved });
+    return { status: `synced ${moved}` };
+  }
   let files: { name: string; mimeType: string; data: Buffer }[] = [];
   if (job.driveFile) {
     const data = await driveDownload(job.userId, job.driveFile.id);

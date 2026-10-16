@@ -16,6 +16,8 @@ const Job = z.object({
   gcsFile: z.object({ bucket: z.string(), name: z.string(), contentType: z.string() }).optional(),
   driveFile: z.object({ id: z.string(), name: z.string(), mimeType: z.string() }).optional(),
   publishTaskId: z.string().optional(),
+  rememberTaskId: z.string().optional(),
+  syncMemory: z.literal(true).optional(),
 });
 
 /**
