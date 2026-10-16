@@ -51,7 +51,8 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   await forgetAccountMemory(uid);
   await deleteMemberships(uid);
   await store.recursiveDelete(store.collection(COLLECTIONS.telegramChats).doc(`${uid}_${uid}`));
-  await store.collection(COLLECTIONS.telegramLinks).doc(uid).update({ pendingEdit: null }).catch(() => undefined);
+  // Ada calls the person by the link's first name; on camera that's Sam, whoever's Telegram it is.
+  await store.collection(COLLECTIONS.telegramLinks).doc(uid).update({ pendingEdit: null, firstName: "Sam" }).catch(() => undefined);
   for (const name of CLEARED) {
     for (;;) {
       const snap = await store.collection(name).where("userId", "==", uid).limit(400).get();

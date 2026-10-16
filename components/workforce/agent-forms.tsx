@@ -25,7 +25,8 @@ async function sample(path: string) {
 function nextMonday(): string {
   const d = new Date();
   d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
-  return d.toISOString().slice(0, 10);
+  // The local date: toISOString() is UTC and lands on Sunday east of Greenwich.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function DmConciergeForm({ agent, busy, run }: FormProps) {
