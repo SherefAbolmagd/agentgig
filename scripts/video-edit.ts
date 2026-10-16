@@ -67,23 +67,23 @@ const sceneSeconds = (sc: Scene, speed: number) => Math.max(sc.pieces.reduce((n,
 /* ------------------------------------------------------------------ */
 
 const ff = (args: string[]) => execFileSync(FFMPEG, ["-y", "-loglevel", "error", ...args], { stdio: ["ignore", "inherit", "inherit"] });
-const VOPTS = ["-r", "30", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", "-an"];
+const VOPTS = ["-r", "60", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", "-an"];
 
 function renderScene(sc: Scene, speed: number): string {
   const parts: string[] = [];
   sc.pieces.forEach((p, i) => {
     const file = `${WORK}/${sc.key}-${i}.mp4`;
     if ("card" in p) {
-      ff(["-loop", "1", "-t", p.seconds.toFixed(3), "-i", `${CARDS}/${p.card}.png`, "-vf", "scale=1920:1080,fps=30", ...VOPTS, file]);
+      ff(["-loop", "1", "-t", p.seconds.toFixed(3), "-i", `${CARDS}/${p.card}.png`, "-vf", "scale=1920:1080,fps=60", ...VOPTS, file]);
     } else if (p.wait && speed > 1) {
       ff([
         "-ss", p.from.toFixed(3), "-to", p.to.toFixed(3), "-i", `${TAKE}/raw.mp4`,
         "-loop", "1", "-i", `${CARDS}/label-x${speed}.png`,
-        "-filter_complex", `[0:v]setpts=PTS/${speed},fps=30[v];[v][1:v]overlay=0:0:shortest=1`,
+        "-filter_complex", `[0:v]setpts=PTS/${speed},fps=60[v];[v][1:v]overlay=0:0:shortest=1`,
         ...VOPTS, file,
       ]);
     } else {
-      ff(["-ss", p.from.toFixed(3), "-to", p.to.toFixed(3), "-i", `${TAKE}/raw.mp4`, "-vf", "fps=30", ...VOPTS, file]);
+      ff(["-ss", p.from.toFixed(3), "-to", p.to.toFixed(3), "-i", `${TAKE}/raw.mp4`, "-vf", "fps=60", ...VOPTS, file]);
     }
     parts.push(file);
   });

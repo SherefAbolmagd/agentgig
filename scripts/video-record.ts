@@ -6,6 +6,9 @@
  *
  *   VIDEO_PASSWORD=... FFMPEG=<path> npx tsx --conditions=react-server scripts/video-record.ts <out-dir> [telegram-profile-dir]
  *
+ * Chrome runs in visible windows (on the second monitor by default) so the GPU
+ * renders at 60 fps; HEADLESS=1 runs it hidden, at the cost of dropped frames.
+ *
  * Without a Telegram profile it records the website alone and approves drafts
  * on the website, which is how the website half is tested.
  * Writes <out-dir>/web.mp4, telegram.mp4 (if any), raw.mp4 (side by side) and marks.json.
@@ -66,7 +69,7 @@ class Screencast {
     const list = `${OUT}/${this.name}/frames.txt`;
     writeFileSync(list, lines.join("\n"));
     const out = `${OUT}/${this.name}.mp4`;
-    execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list, "-vf", `fps=30,scale=${this.w}:${this.h}:force_original_aspect_ratio=decrease,pad=${this.w}:${this.h}:(ow-iw)/2:0,format=yuv420p`, "-c:v", "libx264", "-preset", "medium", "-crf", "16", out]);
+    execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list, "-vf", `fps=60,scale=${this.w}:${this.h}:force_original_aspect_ratio=decrease,pad=${this.w}:${this.h}:(ow-iw)/2:0,format=yuv420p`, "-c:v", "libx264", "-preset", "medium", "-crf", "16", out]);
     return out;
   }
 }
@@ -116,7 +119,7 @@ class Person {
       const p = i / steps;
       const e = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
       await this.page.mouse.move(this.x + (x - this.x) * e, this.y + (y - this.y) * e);
-      await this.page.waitForTimeout(12);
+      await this.page.waitForTimeout(16); // one step per screen refresh
     }
     this.x = x;
     this.y = y;
@@ -245,7 +248,14 @@ async function main() {
   console.log("Resetting the video account…");
   await resetVideoAccount();
 
-  const browser = await chromium.launch({ headless: process.env.HEADED !== "1" });
+  // Visible windows, so the graphics card renders them: headless software
+  // rendering drops frames. They open on a second monitor if there is one
+  // (VIDEO_WINDOW_X, default -1920) and Chrome is told not to slow them down
+  // when they're covered or out of focus.
+  const headless = process.env.HEADLESS === "1";
+  const winX = Number(process.env.VIDEO_WINDOW_X ?? -1920);
+  const smooth = ["--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-features=CalculateNativeWinOcclusion"];
+  const browser = await chromium.launch({ headless, args: [...smooth, `--window-position=${winX},0`, "--window-size=1300,1000"] });
   const webCtx = await browser.newContext({ viewport: { width: 1280, height: 1080 }, deviceScaleFactor: 1, locale: "en-GB", timezoneId: "Europe/London" });
   const web = new Person(await webCtx.newPage());
   await web.setup();
@@ -253,7 +263,7 @@ async function main() {
   let tgCtx: BrowserContext | undefined;
   let tg: Telegram | undefined;
   if (TG_PROFILE) {
-    tgCtx = await chromium.launchPersistentContext(TG_PROFILE, { headless: process.env.HEADED !== "1", viewport: { width: 640, height: 1080 }, locale: "en-GB", timezoneId: "Europe/London" });
+    tgCtx = await chromium.launchPersistentContext(TG_PROFILE, { headless, args: [...smooth, `--window-position=${winX + 1280},0`, "--window-size=660,1000"], viewport: { width: 640, height: 1080 }, locale: "en-GB", timezoneId: "Europe/London" });
     const p = tgCtx.pages()[0] ?? (await tgCtx.newPage());
     tg = new Telegram(new Person(p));
     await tg.me.setup();
