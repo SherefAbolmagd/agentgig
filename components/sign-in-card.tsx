@@ -35,38 +35,40 @@ export function SignInCard() {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="font-display text-2xl">Meet your AI team</CardTitle>
-        <CardDescription>
-          The demo drops you into Café Lumen, a Manchester coffee roaster with two AI employees already hired and 312 tokens to spend.
+    <Card className="w-full max-w-md py-8 shadow-sm">
+      <CardHeader className="gap-2 px-6 sm:px-8">
+        <CardTitle className="font-display text-3xl">{mode === "signin" ? "Meet your AI team" : "Create your account"}</CardTitle>
+        <CardDescription className="text-[15px] leading-relaxed">
+          {mode === "signin"
+            ? "Try the demo to step into Café Lumen, a coffee roaster with two AI employees already hired and 312 tokens to spend."
+            : "Start with 100 free tokens and an empty team, then hire the agents you need."}
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-5">
+      <CardContent className="grid gap-5 px-6 sm:px-8">
         <Button size="lg" onClick={() => attempt("demo", auth.signInDemo)} disabled={!!busy}>
           {busy === "demo" ? <Loader2 className="animate-spin" /> : null}
           Try the demo, no sign-up <ArrowRight />
         </Button>
 
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" /> or use your own business <span className="h-px flex-1 bg-border" />
+          <span className="h-px flex-1 bg-border" /> or use your own account <span className="h-px flex-1 bg-border" />
         </div>
 
-        <Button variant="outline" onClick={() => attempt("google", auth.signInGoogle)} disabled={!!busy}>
+        <Button variant="outline" size="lg" onClick={() => attempt("google", auth.signInGoogle)} disabled={!!busy}>
           {busy === "google" ? <Loader2 className="animate-spin" /> : <GoogleMark />}
           Continue with Google
         </Button>
 
-        <form onSubmit={submit} className="grid gap-3">
+        <form onSubmit={submit} className="grid gap-4">
           {mode === "signup" && (
             <div className="grid gap-1.5">
               <Label htmlFor="name">Your name</Label>
-              <Input id="name" name="name" autoComplete="name" />
+              <Input id="name" name="name" autoComplete="name" className="h-11" />
             </div>
           )}
           <div className="grid gap-1.5">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" autoComplete="email" required />
+            <Input id="email" name="email" type="email" autoComplete="email" required className="h-11" />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="password">Password</Label>
@@ -77,9 +79,10 @@ export function SignInCard() {
               minLength={6}
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
               required
+              className="h-11"
             />
           </div>
-          <Button type="submit" variant="secondary" disabled={!!busy}>
+          <Button type="submit" variant="secondary" size="lg" disabled={!!busy}>
             {busy === "email" ? <Loader2 className="animate-spin" /> : null}
             {mode === "signin" ? "Sign in" : "Create account · 100 free tokens"}
           </Button>

@@ -1,6 +1,6 @@
 "use client";
 import { Suspense } from "react";
-import { Loader2 } from "lucide-react";
+import { Brain, Coins, Loader2, MessageCircle } from "lucide-react";
 import { RedirectFeedback } from "@/components/connect-feedback";
 import { Logo } from "@/components/brand";
 import { Button } from "@/components/ui/button";
@@ -40,9 +40,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return (
-      <div className="grid min-h-dvh place-items-center gap-6 px-4 py-10">
-        <div className="grid justify-items-center gap-8">
-          <Logo />
+      <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <SignInStory />
+        <div className="flex flex-col items-center justify-center gap-8 px-4 py-10 sm:px-8">
+          <Logo className="lg:hidden" />
           <SignInCard />
         </div>
       </div>
@@ -57,5 +58,39 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </Suspense>
       <main className="mx-auto max-w-7xl px-4 pb-20 pt-8 sm:px-6">{children}</main>
     </>
+  );
+}
+
+/** The left half of the sign-in screen on wide screens: what AgentGig is, in three lines. */
+function SignInStory() {
+  const points = [
+    { icon: <Brain className="size-5" />, title: "One shared memory", text: "What one agent or teammate learns, the whole team can use." },
+    { icon: <MessageCircle className="size-5" />, title: "Text your team", text: "Ask Ada on Telegram and she hands the job to the right agent." },
+    { icon: <Coins className="size-5" />, title: "Pay per finished task", text: "Tokens are only charged when an agent delivers." },
+  ];
+  return (
+    <aside className="hidden flex-col justify-between gap-12 bg-console p-12 text-console-foreground lg:flex xl:p-16">
+      <Logo className="text-white" />
+      <div className="grid max-w-lg gap-8">
+        <div className="grid gap-4">
+          <p className="font-mono text-xs uppercase tracking-widest text-amber-300">The AI workforce for your business</p>
+          <h2 className="font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-white">AI employees that work as one team</h2>
+        </div>
+        <ul className="grid gap-5">
+          {points.map((p) => (
+            <li key={p.title} className="flex gap-4">
+              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white/10 text-emerald-300">{p.icon}</span>
+              <span>
+                <span className="block font-semibold text-white">{p.title}</span>
+                <span className="text-sm text-console-foreground/80">{p.text}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="max-w-lg border-t border-white/10 pt-6 text-sm text-console-foreground/80">
+        You used to hire people and pay them a salary. <span className="text-white">Now you hire AI and pay it in tokens.</span>
+      </p>
+    </aside>
   );
 }
