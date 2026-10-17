@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { Delivery } from "@/lib/connectors";
+import { publishReply } from "@/lib/reviews";
+import { SITE } from "@/lib/site";
 import { generateJson, textPart } from "@/lib/vertex";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
@@ -8,6 +10,8 @@ export const ReviewInput = z.object({
   rating: z.number().int().min(1).max(5),
   reviewerName: z.string().trim().max(80).optional(),
   platform: z.string().trim().max(40).default("Google"),
+  /** Set when the review came from the account's review page: the reply is published there. */
+  reviewId: z.string().regex(/^[A-Za-z0-9]{10,40}$/).optional(),
 });
 export type ReviewInput = z.infer<typeof ReviewInput>;
 
@@ -18,7 +22,7 @@ const ModelOutput = z.object({
   themes: z.array(z.string()).max(5).describe("Short topics the review is about, e.g. delivery speed"),
   internalNote: z.string().describe("One sentence for the owner: what to fix or follow up, if anything"),
 });
-export type ReviewOutput = z.infer<typeof ModelOutput> & { rating: number; platform: string };
+export type ReviewOutput = z.infer<typeof ModelOutput> & { rating: number; platform: string; reviewId?: string };
 
 const SYSTEM = `You are ReviewPulse. Draft a public reply to a customer review for a small business.
 - Thank them by first name if given. Address the specific points they raised.
@@ -47,7 +51,7 @@ export const reviewPulse = defineAgent<ReviewInput, ReviewOutput>({
       thinkingBudget: 0,
     });
     const urgent = res.data.urgent || input.rating <= 2;
-    return { ...res, output: { ...res.data, urgent, rating: input.rating, platform: input.platform } };
+    return { ...res, output: { ...res.data, urgent, rating: input.rating, platform: input.platform, ...(input.reviewId && { reviewId: input.reviewId }) } };
   },
 
   approval(o) {
@@ -63,8 +67,13 @@ export const reviewPulse = defineAgent<ReviewInput, ReviewOutput>({
     };
   },
 
-  // Posting review replies needs Google Business Profile API access, which Google grants on application.
-  async deliver(o): Promise<Delivery> {
+  async deliver(o, { userId }): Promise<Delivery> {
+    if (o.reviewId && (await publishReply(userId, o.reviewId, o.reply))) {
+      const { db } = await import("@/lib/firebase-admin");
+      const slug = (await db().collection("users").doc(userId).get()).get("reviewSlug") as string | undefined;
+      return { delivered: true, summary: "Reply published under the review on your review page", links: slug ? [{ label: "Review page", url: `${SITE.url}/r/${slug}` }] : [] };
+    }
+    // Posting replies on Google needs Business Profile API access, which Google grants on application.
     return { delivered: false, summary: `Reply approved. Paste it into ${o.platform}: it's in the result panel with a copy button.` };
   },
 });

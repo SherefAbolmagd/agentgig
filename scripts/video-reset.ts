@@ -4,7 +4,7 @@
  * video-cafe-lumen), never the judges' or anyone else's.
  *
  * Kept between takes: the sign-in, the Google connection and Sam's Telegram
- * link. Cleared: tasks, ledger, approvals, hires, memory, uploaded files,
+ * link. Cleared: tasks, ledger, approvals, hires, memory, reviews, uploaded files,
  * teammates, invites and the Telegram chat history.
  *
  *   npm run video:reset                       (the first run prints the password)
@@ -25,13 +25,13 @@ export const VIDEO = {
 const TEAM: { agentId: string; triggerId: string; approvalMode: "ask" | "auto" }[] = [
   { agentId: "receipthero", triggerId: "inbox", approvalMode: "ask" },
   { agentId: "vat-reconciler", triggerId: "manual", approvalMode: "auto" },
-  { agentId: "reviewpulse", triggerId: "manual", approvalMode: "ask" },
+  { agentId: "reviewpulse", triggerId: "review-page", approvalMode: "ask" },
   { agentId: "echosocial", triggerId: "manual", approvalMode: "ask" },
   { agentId: "invoice-chaser", triggerId: "manual", approvalMode: "ask" },
   { agentId: "rotabuilder", triggerId: "manual", approvalMode: "ask" },
 ];
 
-const CLEARED = ["tasks", "token_transactions", "approvals", "hires", "knowledge_sources", "style_examples", "invoice_keys", "memory"] as const;
+const CLEARED = ["tasks", "token_transactions", "approvals", "hires", "knowledge_sources", "style_examples", "invoice_keys", "memory", "reviews"] as const;
 
 export async function resetVideoAccount(): Promise<{ password?: string }> {
   const { FieldValue } = await import("firebase-admin/firestore");
@@ -42,6 +42,7 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   const { forgetAccountMemory, queueBankSync } = await import("@/lib/memory");
   const { deleteMemberships } = await import("@/lib/org");
   const { seedDemoMemory } = await import("@/lib/users");
+  const { ensureReviewPage } = await import("@/lib/reviews");
   const { DEMO_USER } = await import("@/data/agents");
   const { COLLECTIONS } = await import("@/types/firestore");
   const store = db();
@@ -110,6 +111,8 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
     createdAt: FieldValue.serverTimestamp(),
   });
   for (const h of TEAM) await hireAgent(uid, { ...h, knowledgeAccess: ["profile"] });
+  // Customers review Café Lumen at agentgig.si/r/cafe-lumen; ReviewPulse listens there.
+  await ensureReviewPage(uid, "cafe-lumen");
   await seedDemoMemory(uid);
   await queueBankSync(uid);
   return { password };

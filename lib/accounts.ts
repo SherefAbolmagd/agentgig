@@ -21,6 +21,7 @@ const USER_COLLECTIONS = [
   COLLECTIONS.styleExamples,
   COLLECTIONS.invoiceKeys,
   COLLECTIONS.memory,
+  COLLECTIONS.reviews,
 ] as const;
 
 /**

@@ -33,6 +33,8 @@ export const COLLECTIONS = {
   telegramUpdates: "telegram_updates",
   /** telegram_chats/{accountId}_{uid}/messages: each person's conversation with the supervisor. Server-only. */
   telegramChats: "telegram_chats",
+  /** reviews/{id}: customer reviews left on an account's public review page. Server-only. */
+  reviews: "reviews",
 } as const;
 
 export type ToolProvider =
@@ -102,6 +104,8 @@ export interface UserDoc {
   tokensHeld: number;
   tokensSpent: number;
   businessProfile?: BusinessProfile;
+  /** Address of the public review page, /r/{reviewSlug}; set when first used. */
+  reviewSlug?: string;
   /** Company memory settings; missing means on, with approval for Customers and Money. */
   memory?: MemorySettings;
   createdAt: Ts;
@@ -380,5 +384,17 @@ export interface StyleExampleDoc {
   agentId: string;
   draft: string;
   edited: string;
+  createdAt: Ts;
+}
+
+/* ---------- reviews/{id} ---------- */
+
+export interface ReviewDoc {
+  userId: string;
+  rating: number;
+  name: string;
+  text: string;
+  status: "new" | "replied" | "hidden";
+  reply: { text: string; at: Ts } | null;
   createdAt: Ts;
 }

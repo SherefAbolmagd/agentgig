@@ -38,7 +38,9 @@ async function main() {
       kept++;
       return;
     }
-    batch.set(refs[i], { ...agent, listedAt: FieldValue.serverTimestamp() });
+    // Keep what the listing has earned so far.
+    const earned = current[i].exists ? { taskCount: current[i].get("taskCount") ?? 0, rating: current[i].get("rating") ?? null } : {};
+    batch.set(refs[i], { ...agent, ...earned, listedAt: FieldValue.serverTimestamp() });
   });
   await batch.commit();
   console.log(`✓ ${SEED_AGENTS.length - kept} agents upserted${kept ? `, ${kept} registered partner listing(s) left as they are` : ""}`);
