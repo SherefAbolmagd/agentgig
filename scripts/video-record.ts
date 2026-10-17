@@ -25,7 +25,8 @@ const VOICE_SECONDS = (readFileSync(MIC).length - 44) / (48000 * 2);
 async function main() {
   const { readSecret } = await import("@/lib/secrets");
   const { getConnection } = await import("@/lib/connectors");
-  const { driveListInvoices, driveUploadInvoice } = await import("@/lib/connectors/google");
+  const { driveListInvoices } = await import("@/lib/connectors/google");
+  const { accessToken } = await import("@/lib/connectors/tokens");
   const { queueDriveInvoices } = await import("@/lib/triggers");
   const apiKey = await readSecret("projects/agentexchange-hackathon/secrets/labelwise-api-key");
   const stripe = !!(await getConnection(UID, "stripe"));
@@ -126,7 +127,19 @@ async function main() {
     /* 9 · A supplier invoice lands in Google Drive */
     mark("scene 9 drive");
     const folder = await driveListInvoices(UID);
-    await driveUploadInvoice(UID, { name: "invoice-NW-3317.pdf", mimeType: "application/pdf", data: readFileSync(`${FIX}/invoice-NW-3317.pdf`) });
+    // The supplier's invoice arrives in the folder, as if dropped there (Drive's multipart upload).
+    const token = await accessToken((await getConnection(UID, "google"))!);
+    const boundary = `ww${Date.now()}`;
+    const upload = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": `multipart/related; boundary=${boundary}` },
+      body: Buffer.concat([
+        Buffer.from(`--${boundary}\r\ncontent-type: application/json\r\n\r\n${JSON.stringify({ name: "invoice-NW-3317.pdf", parents: [folder!.folderId] })}\r\n--${boundary}\r\ncontent-type: application/pdf\r\n\r\n`),
+        readFileSync(`${FIX}/invoice-NW-3317.pdf`),
+        Buffer.from(`\r\n--${boundary}--`),
+      ]),
+    });
+    if (!upload.ok) throw new Error(`Drive upload failed: ${upload.status}`);
     mark("drive upload");
     if (folder) await web.glance(`https://drive.google.com/drive/folders/${folder.folderId}`, (g) => g.getByText("invoice-NW-3317.pdf").first(), 2500);
     // Drive is checked every 5 minutes; the edit skips ahead to the check.
