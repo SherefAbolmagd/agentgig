@@ -70,47 +70,44 @@ ff(["-f", "lavfi", "-i", "anoisesrc=d=0.7:c=pink:a=0.5", "-af", "bandpass=f=900:
 type Piece = { from: number; to: number; speed: number; wait?: boolean; hold?: number };
 type Segment =
   | { kind: "cold" | "scene"; key?: string; start: number; dur: number; pieces: (Piece & { outStart: number; outDur: number })[] }
-  | { kind: "title" | "arch" | "stats" | "end"; key?: string; start: number; dur: number };
+  | { kind: "title" | "team" | "arch" | "stats" | "end"; key?: string; start: number; dur: number };
 
 const voiceLen = (key: string) => wavSeconds(`${ROOT}/public/audio/voice/${key}.wav`);
 const p = (from: number, to: number, speed = 1, wait = false): Piece => ({ from, to, speed, wait });
 const w = (from: number, to: number) => p(from, to, 1, true);
 
-// Cold open: "where's my order?", answered from Sam's phone.
+// The story: every agent starts on an event; marks come from scripts/video-record.ts.
 const has = (label: string) => marks.some((m) => m.label === label);
-const cold: Piece[] = [p(at("cold"), at("cold") + 3), w(at("cold") + 3, at("cold draft") - 0.8), p(at("cold draft") - 0.8, at("scene 3 home"))];
 
-/** The next scene's start after `label` (scene 5 is only there when Stripe is connected). */
-const nextScene = (after: string) => marks.find((m) => /^scene \d+/.test(m.label) && m.t > at(after))?.t ?? at("end");
+/** One event: what happened, the wait while the agent works (sped up), then Sam's phone and the result. */
+const event = (start: string, shown: string, ready: string, next: string): Piece[] => [p(at(start), at(shown)), w(at(shown), at(ready) - 0.8), p(at(ready) - 0.8, at(next))];
 
-const scenes: { key: string; pieces: Piece[] }[] = [
-  { key: "03", pieces: [p(at("scene 3 home"), at("scene 4 stock"))] },
-  { key: "04", pieces: [p(at("scene 4 stock"), at("scene 4 stock") + 4), w(at("scene 4 stock") + 4, at("stock ready") - 0.8), p(at("stock ready") - 0.8, nextScene("scene 4 stock"))] },
-  ...(has("scene 5 revenue")
-    ? [{ key: "05", pieces: [p(at("scene 5 revenue"), at("voice sent") + 1), w(at("voice sent") + 1, at("revenue posted") - 0.8), p(at("revenue posted") - 0.8, at("scene 6 hire"))] }]
-    : []),
-  { key: "06", pieces: [p(at("scene 6 hire"), at("scene 7 winback"))] },
-  { key: "07", pieces: [p(at("scene 7 winback"), at("scene 7 winback") + 3), w(at("scene 7 winback") + 3, at("winback ready") - 0.8), p(at("winback ready") - 0.8, at("scene 8 quote"))] },
-  { key: "08", pieces: [p(at("scene 8 quote"), at("scene 8 quote") + 3), w(at("scene 8 quote") + 3, at("quote posted") - 0.8), p(at("quote posted") - 0.8, at("scene 9 drive"))] },
-  {
-    key: "09",
-    // The 5-minute Drive check is skipped: the glance at the folder runs into the check.
-    pieces: [p(at("scene 9 drive"), at("drive checked")), w(at("drive checked"), at("invoice draft") - 0.8), p(at("invoice draft") - 0.8, at("scene 10 memory"))],
-  },
-  { key: "10", pieces: [p(at("scene 10 memory"), at("fact approved") + 3), w(at("fact approved") + 3, at("memory answered") - 0.8), p(at("memory answered") - 0.8, at("scene 11 team"))] },
-  { key: "11", pieces: [p(at("scene 11 team"), at("scene 12 developers"))] },
-  { key: "12", pieces: [p(at("scene 12 developers"), at("scene 12 developers") + 5), w(at("scene 12 developers") + 5, at("partner listed") - 0.8), p(at("partner listed") - 0.8, at("scene 13 cost"))] },
-  { key: "13", pieces: [p(at("scene 13 cost"), at("scene 13 cost") + 3), w(at("scene 13 cost") + 3, at("cost answered") - 0.8), p(at("cost answered") - 0.8, at("end"))] },
+// The hook: a Shopify order comes in and Sam's phone lights up, nobody asked.
+const hook: Piece[] = [p(at("event order"), at("order placed")), w(at("order placed"), at("order ready") - 0.8), p(at("order ready") - 0.8, at("order ready") + 2.6)];
+
+const scenes: { key: string; pieces: Piece[]; chip?: [string, string, string] }[] = [
+  { key: "03", pieces: [p(at("tour team"), at("tour telegram"))] },
+  { key: "04", pieces: [p(at("tour telegram"), at("event order"))] },
+  { key: "05", pieces: event("event order", "order placed", "order ready", "event where"), chip: ["09:02", "Shopify", "New order"] },
+  { key: "06", pieces: event("event where", "where email", "where ready", "event refund"), chip: ["09:40", "Gmail", "Customer email"] },
+  { key: "07", pieces: event("event refund", "refund email", "refund ready", "event declined"), chip: ["10:30", "Gmail", "Refund request"] },
+  { key: "08", pieces: event("event declined", "declined shown", "declined ready", "event invoice"), chip: ["11:15", "Stripe", "Card declined"] },
+  // The 5-minute Drive check is skipped: the glance at the folder runs into the check.
+  { key: "09", pieces: event("event invoice", "invoice uploaded", "invoice ready", "event quote"), chip: ["12:05", "Google Drive", "Supplier invoice"] },
+  { key: "10", pieces: event("event quote", "quote email", "quote ready", "cost"), chip: ["14:20", "Gmail", "Wholesale enquiry"] },
+  { key: "11", pieces: [p(at("cost"), at("cost") + 3), w(at("cost") + 3, at("cost answered") - 0.8), p(at("cost answered") - 0.8, at("end"))] },
 ];
 
 const piecesLen = (ps: Piece[], waitSpeed: number) => ps.reduce((n, x) => n + (x.to - x.from) / (x.wait ? waitSpeed : x.speed), 0);
 const sceneLen = (sc: { key: string; pieces: Piece[] }, waitSpeed: number) => Math.max(piecesLen(sc.pieces, waitSpeed), voiceLen(sc.key) + LEAD + TAIL);
 const TITLE = voiceLen("01") + LEAD + 1.0;
-const ARCH = voiceLen("14") + LEAD + 0.6;
+const TEAM = voiceLen("02") + LEAD + 1.2;
+const ARCH = voiceLen("12") + LEAD + 0.6;
 const STATS = 3.8;
 const END = 4.0;
-const fixed = TITLE + ARCH + STATS + END;
-const waitSpeed = [1, 1.5, 2, 3, 4, 6].find((s) => fixed + piecesLen(cold, s) + scenes.reduce((n, sc) => n + sceneLen(sc, s), 0) <= MAX_TOTAL) ?? 6;
+const fixed = TITLE + TEAM + ARCH + STATS + END;
+const hookLen = (s: number) => Math.max(piecesLen(hook, s), voiceLen("00") + LEAD + 0.6);
+const waitSpeed = [1, 1.5, 2, 3, 4, 6, 8].find((s) => fixed + hookLen(s) + scenes.reduce((n, sc) => n + sceneLen(sc, s), 0) <= MAX_TOTAL) ?? 8;
 
 const segments: Segment[] = [];
 let t = 0;
@@ -131,11 +128,13 @@ const place = (kind: "cold" | "scene", key: string | undefined, ps: Piece[], min
   }
   segments.push({ kind, key, start, dur: t - start, pieces: out });
 };
-place("scene", undefined, cold);
+place("scene", "00", hook, voiceLen("00") + LEAD + 0.6);
 segments.push({ kind: "title", key: "01", start: t, dur: TITLE });
 t += TITLE;
+segments.push({ kind: "team", key: "02", start: t, dur: TEAM });
+t += TEAM;
 for (const sc of scenes) place("scene", sc.key, sc.pieces, voiceLen(sc.key) + LEAD + TAIL);
-segments.push({ kind: "arch", key: "14", start: t, dur: ARCH });
+segments.push({ kind: "arch", key: "12", start: t, dur: ARCH });
 t += ARCH;
 segments.push({ kind: "stats", start: t, dur: STATS });
 t += STATS;
@@ -155,13 +154,17 @@ for (const seg of segments) {
   }
 }
 
-/** Every output time showing a moment of the take (the cold open repeats some). */
+/** Every output time showing a moment of the take (the hook repeats some). */
 const toOutAll = (src: number): number[] =>
   segments.flatMap((s) => ("pieces" in s ? s.pieces.filter((x) => !x.hold && src >= x.from && src < x.to).map((x) => x.outStart + (src - x.from) / x.speed) : []));
-/** When a moment of the take appears in the story's scenes, if it does. */
-const toOut = (src: number): number | null => toOutAll(src).filter((o) => o >= (segments.find((s) => s.kind === "scene" && s.key)?.start ?? 0)).shift() ?? null;
+/** When a moment of the take appears in the story after the hook, if it does. */
+const toOut = (src: number): number | null => toOutAll(src).filter((o) => o >= sceneStart("03")).shift() ?? null;
 
 const sceneStart = (key: string) => segments.find((s) => s.key === key)!.start;
+const sceneEnd = (key: string) => {
+  const s = segments.find((x) => x.key === key)!;
+  return s.start + s.dur;
+};
 const voice = segments.filter((s) => s.key).map((s) => ({ key: s.key!, start: s.start + LEAD, dur: voiceLen(s.key!) }));
 
 const captions = voice.flatMap(({ key, start, dur }) => {
@@ -176,24 +179,30 @@ const captions = voice.flatMap(({ key, start, dur }) => {
   });
 });
 
+const chips = [
+  { start: sceneStart("00") + 0.3, end: sceneEnd("00") - 0.2, clock: "09:02", source: "Shopify", what: "New order" },
+  ...scenes.filter((sc) => sc.chip).map((sc) => ({ start: sceneStart(sc.key) + 0.3, end: sceneEnd(sc.key) - 0.2, clock: sc.chip![0], source: sc.chip![1], what: sc.chip![2] })),
+];
+
 const callout = (outT: number | null, text: string, sub?: string) => (outT === null ? [] : [{ start: outT, end: outT + 3.4, text, sub }]);
 const callouts = [
-  ...callout(toOutAll(at("cold") + 1)[0] ?? null, "A customer emails: where's my order?", "It lands in Gmail. Nobody forwards it"),
-  ...callout(toOutAll(at("cold draft"))[0] ?? null, "Order Desk picked it up by itself", "Found in Shopify · reply drafted in the thread"),
-  ...callout(sceneStart("03") + 1.5, "One team for the whole shop", "Orders · stock · money · customers"),
-  ...callout(sceneStart("04") + 1.2, "Runs by itself every morning", "Started by hand for the demo"),
-  ...callout(toOut(at("stock ready")), "Two products running low", "Reorder email drafted"),
-  ...callout(toOut(at("drafts shown")), "Waiting in Gmail", "Nothing is sent without Sam"),
-  ...(has("revenue posted") ? callout(toOut(at("revenue posted")), "This week's takings from Stripe", "And one declined card") : []),
-  ...callout(sceneStart("06") + 1.5, "Hired in seconds", "Works in Sam's Shopify · 30-token monthly cap"),
-  ...callout(toOut(at("winback ready")), "4 customers to win back", "Only those who opted in to emails"),
-  ...callout(toOut(at("quote email")), "A wholesale enquiry by email", "Quote Builder picks it up from the inbox"),
-  ...callout(toOut(at("quote posted")), "Priced from Sam's own list", "Volume discounts applied"),
-  ...callout(toOut(at("drive upload")), "Lands in Google Drive", "The folder is checked every 5 minutes"),
-  ...callout(toOut(at("invoice draft")), "£22.00 overcharge caught", "Gemini reads it · code checks the sums"),
-  ...callout(toOut(at("fact approved")), "Memory with a human check", "Customer and money facts need an OK"),
-  ...callout(toOut(at("invite created")), "Roles for the whole team", "Managers approve · the owner pays"),
-  ...callout(toOut(at("partner listed")), "Five live checks, then listed", "Partners earn 80% of the tokens"),
+  ...callout(toOutAll(at("order ready"))[0] ?? null, "Nobody asked. The order did.", "Inventory Guardian picked it up by itself"),
+  ...callout(sceneStart("03") + 1.2, "What starts each agent", "Chosen when Sam hires it"),
+  ...callout(toOut(at("tour memory")), "One memory for the whole team", "Customer and money facts need Sam's OK"),
+  ...callout(toOut(at("tour marketplace")), "Hire more from the marketplace", "Paid per finished task"),
+  ...callout(sceneStart("04") + 1.0, "Link Telegram once", "Ada brings every draft to Sam's phone"),
+  ...callout(toOut(at("order ready")), "Fig & Cedar down to 2", "Reorder to Calder Candle Co. written"),
+  ...callout(toOut(at("order approved")), "Sent from Sam's Gmail", "Only after Sam's tap"),
+  ...callout(toOut(at("where email")), "A customer emails", "Nobody forwards it"),
+  ...callout(toOut(at("where ready")), "Found in Shopify", "Tracking included"),
+  ...callout(toOut(at("refund ready")), "Refund £24.00?", "Only the cracked candle, never more than was paid"),
+  ...callout(toOut(at("refund approved")), "Refunded in Stripe", "Apology sent in the same thread"),
+  ...callout(toOut(at("declined shown")), "Card declined in Stripe", "Stripe tells AgentGig straight away"),
+  ...callout(toOut(at("declined ready")), "A kind note, a new payment link", "The sale isn't lost"),
+  ...callout(toOut(at("invoice uploaded")), "Lands in Google Drive", "The folder is checked every 5 minutes"),
+  ...callout(toOut(at("invoice ready")), "£22.00 overcharge caught", "Gemini reads it · code checks the sums"),
+  ...callout(toOut(at("quote email")), "A wholesale enquiry", "Quote Builder picks it up from the inbox"),
+  ...callout(toOut(at("quote ready")), "Priced from Sam's own list", "And it remembers Northside pays late"),
   ...callout(toOut(at("cost answered")), "Charged only for finished work", "Failed tasks are free"),
 ];
 
@@ -278,11 +287,11 @@ const camera = Object.fromEntries(segments.filter((s): s is Extract<Segment, { k
 const sounds = [
   ...events.filter((e) => e.kind === "message").flatMap((e) => toOutAll(e.t).map((at) => ({ at, src: "ping" }))),
   ...events.filter((e) => e.kind === "click").flatMap((e) => toOutAll(e.t).map((at) => ({ at, src: "tap" }))),
-  ...segments.filter((s) => s.kind !== "scene" || s.key === "03").map((s) => ({ at: s.start - 0.25, src: "whoosh" })),
+  ...segments.filter((s, i) => i > 0 && (s.kind !== "scene" || s.key === "03" || s.key === "05")).map((s) => ({ at: s.start - 0.25, src: "whoosh" })),
 ].filter((s): s is { at: number; src: string } => s.at !== null);
 
 writeFileSync(
   `${ROOT}/src/timeline.json`,
-  JSON.stringify({ total, waitSpeed, costTokens: Number(/(\d+) tokens/.exec(events.filter((e) => e.kind === "message").pop()?.text ?? "")?.[1] ?? 0), tasks: marks.filter((m) => /approved|posted|ready|answered/.test(m.label)).length, pages: { web: { w: even(webRect.w), h: even(webRect.h) }, tg: { w: even(tgRect.w), h: even(tgRect.h) } }, segments, camera, voice, captions, callouts, sounds, events, musicSeconds: wavSeconds(`${ROOT}/public/audio/music.wav`) }, null, 1),
+  JSON.stringify({ total, waitSpeed, costTokens: Number(/(\d+) tokens/.exec(events.filter((e) => e.kind === "message").pop()?.text ?? "")?.[1] ?? 0), tasks: marks.filter((m) => / approved$/.test(m.label)).length, chips, pages: { web: { w: even(webRect.w), h: even(webRect.h) }, tg: { w: even(tgRect.w), h: even(tgRect.h) } }, segments, camera, voice, captions, callouts, sounds, events, musicSeconds: wavSeconds(`${ROOT}/public/audio/music.wav`) }, null, 1),
 );
 console.log(`✓ timeline: ${total.toFixed(1)} s, waits ×${waitSpeed}, ${callouts.length} callouts, ${sounds.length} sounds`);

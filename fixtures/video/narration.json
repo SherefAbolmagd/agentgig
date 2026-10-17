@@ -1,15 +1,15 @@
 {
-  "01": "Running an online shop means a hundred small jobs every week. AgentGig gives you AI agents that do them, paid per finished task, working as one team you can run from your phone.",
-  "03": "This is Sam, who runs Willow and Wick, an online candle store. Sam's team has agents for orders, stock, money and customers, all sharing one memory.",
-  "04": "Every morning at seven, Inventory Guardian checks stock in Shopify. Fig and Cedar is nearly gone, so it drafts the reorder, and the email waits in Gmail for Sam's OK.",
-  "05": "Sam just asks. Revenue Pulse reads Stripe: this week's takings, and a card that was declined.",
-  "06": "Need something new? Hire it. Win-back works in Sam's Shopify store, asks before it emails anyone, and has a monthly spending cap.",
-  "07": "It finds four customers who haven't ordered since the summer and writes each one a personal email, only to people who agreed to hear from the shop.",
-  "08": "A homeware shop emails for forty gift sets. Quote Builder picks it up from the inbox, prices every line from Sam's wholesale list, and drafts the reply in the same email thread.",
-  "09": "A supplier invoice lands in Google Drive. ReceiptHero picks it up on its own, Gemini reads it, code checks every sum, and a twenty-two pound overcharge is caught and logged to the spend sheet.",
-  "10": "Agents learn as they work, and they write down what they learn. Facts about customers and money wait for Sam's OK, and once approved, every agent knows them.",
-  "11": "Sam invites Priya as a manager. Priya can approve drafts too, but only Sam can buy tokens.",
-  "12": "Any developer can sell their own agent here. LabelWise registers its candle label checker, five live checks pass, and it's in the marketplace.",
-  "13": "And the bill? Tokens are held when work starts and charged only when it's delivered. Failed work is free.",
-  "14": "Under the hood, one gateway on Cloud Run runs every task through verify, reserve, scrub, ground, run and deliver, with Gemini on Vertex AI, Firestore and Memory Bank. AgentGig: AI employees that work as one team."
+  "00": "Sam didn't ask for that. The order did.",
+  "01": "AgentGig gives you AI agents that do the small jobs of running a shop. Each one starts when something happens, and you approve from your phone.",
+  "02": "Meet Sam, who runs Willow and Wick, an online candle shop. Sam has hired five agents. Inventory Guardian watches new orders and stock. Order Desk answers customers and handles refunds. Payment Rescue follows up declined cards. ReceiptHero checks supplier invoices. And Quote Builder prices wholesale orders. They share one memory, so what one learns, they all know.",
+  "03": "On the website, Sam sees the team and what starts each agent, the memory they share, and a marketplace to hire more. Sam pays in tokens, only for finished work.",
+  "04": "Sam linked Telegram once. Ada, the team's supervisor, brings every draft to Sam's phone to approve. Sam never types a task. Here's one day at the shop.",
+  "05": "Nine o'clock: a new order on Shopify. Inventory Guardian sees it leaves just two Fig and Cedar candles, and writes the reorder to the supplier. Sam taps approve, and it's sent.",
+  "06": "A customer emails: where's my order? Order Desk finds it in Shopify, with tracking, and replies in the same thread.",
+  "07": "Emma's candle arrived cracked. Order Desk finds her payment in Stripe and asks first. One tap refunds her, and the apology goes out.",
+  "08": "A card is declined at checkout. Payment Rescue sends a kind note with a fresh payment link, so the sale isn't lost.",
+  "09": "A supplier invoice lands in Google Drive. ReceiptHero reads it, code checks every sum, and a twenty-two pound overcharge is caught and logged.",
+  "10": "A homeware shop emails for forty gift sets. Quote Builder prices them from Sam's list, and remembers this customer pays late.",
+  "11": "And the bill? Tokens are held when work starts and charged only when it's delivered. Failed work is free.",
+  "12": "Under the hood, one gateway on Cloud Run runs every task through verify, reserve, scrub, ground, run and deliver, with Gemini on Vertex AI, Firestore and Memory Bank. AgentGig: AI employees that work as one team."
 }

@@ -20,6 +20,8 @@ const T = timeline as unknown as {
   total: number;
   waitSpeed: number;
   costTokens: number;
+  tasks: number;
+  chips: { start: number; end: number; clock: string; source: string; what: string }[];
   pages: { web: { w: number; h: number }; tg: { w: number; h: number } };
   segments: Seg[];
   camera: Record<string, View[]>;
@@ -189,11 +191,70 @@ function Title() {
         ))}
       </h1>
       <div style={{ display: "flex", gap: 18, marginTop: 60 }}>
-        {["Bookkeeping", "VAT", "Quotes", "Reviews", "Rotas", "on Telegram"].map((t, i) => (
+        {["Shopify", "Stripe", "Gmail", "Google Drive", "on Telegram"].map((t, i) => (
           <span key={t} style={{ fontFamily: sans, fontSize: 28, padding: "12px 26px", borderRadius: 999, border: `1px solid ${C.line}`, background: C.card, color: C.fg, ...rise(frame, 1.4 + i * 0.1, fps) }}>
             {t}
           </span>
         ))}
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+/** Sam's team: who they are, what they do, and what starts them. Rows arrive as the narration names them. */
+const TEAM: [string, string, string][] = [
+  ["Inventory Guardian", "Packs orders, watches stock, reorders", "A new Shopify order"],
+  ["Order Desk", "Answers customers, handles refunds", "A customer's email"],
+  ["Payment Rescue", "Follows up declined cards", "A failed payment in Stripe"],
+  ["ReceiptHero", "Checks every supplier invoice", "A file in Google Drive"],
+  ["Quote Builder", "Prices wholesale enquiries", "A quote request by email"],
+];
+
+function Team({ seg }: { seg: Seg }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  // The narration introduces Sam first, then the agents one by one, then the shared memory.
+  const row = (i: number) => 3.4 + i * ((seg.dur * 0.72 - 3.4) / TEAM.length);
+  return (
+    <AbsoluteFill style={{ padding: "90px 110px", display: "grid", gridTemplateColumns: "520px 1fr", gap: 70, alignContent: "center" }}>
+      <div style={{ ...rise(frame, 0.15, fps) }}>
+        <div style={{ fontFamily: mono, fontSize: 22, letterSpacing: "0.14em", color: C.green }}>MEET SAM</div>
+        <div style={{ marginTop: 22, borderRadius: 26, padding: "36px 36px 32px", background: C.card, border: `1px solid ${C.line}` }}>
+          <div style={{ width: 96, height: 96, borderRadius: 48, background: "#22413a", display: "grid", placeItems: "center", fontFamily: display, fontWeight: 700, fontSize: 40, color: C.green }}>SP</div>
+          <div style={{ fontFamily: display, fontWeight: 800, fontSize: 52, color: C.fg, marginTop: 22 }}>Sam Patel</div>
+          <div style={{ fontFamily: sans, fontSize: 28, color: C.muted, marginTop: 6 }}>Willow &amp; Wick · online candle shop, Leeds</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 28 }}>
+            {["Shopify", "Stripe", "Gmail", "Drive", "Telegram"].map((t, i) => (
+              <span key={t} style={{ fontFamily: sans, fontSize: 22, padding: "8px 18px", borderRadius: 999, border: `1px solid ${C.line}`, color: C.fg, ...rise(frame, 0.8 + i * 0.1, fps) }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style={{ fontFamily: mono, fontSize: 22, letterSpacing: "0.14em", color: C.green, ...rise(frame, 2.8, fps) }}>THE TEAM · AND WHAT STARTS EACH ONE</div>
+        <div style={{ display: "grid", gap: 14, marginTop: 22 }}>
+          {TEAM.map(([name, job, trigger], i) => (
+            <div key={name} style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: 24, borderRadius: 18, padding: "20px 26px", background: C.card, border: `1px solid ${C.line}`, ...rise(frame, row(i), fps) }}>
+              <div>
+                <div style={{ fontFamily: display, fontWeight: 700, fontSize: 34, color: C.fg }}>{name}</div>
+                <div style={{ fontFamily: sans, fontSize: 23, color: C.muted, marginTop: 2 }}>{job}</div>
+              </div>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: sans, fontWeight: 500, fontSize: 22, padding: "10px 18px", borderRadius: 999, background: "#17302a", color: C.green, whiteSpace: "nowrap" }}>
+                <span style={{ width: 10, height: 10, borderRadius: 5, background: C.spark }} />
+                {trigger}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 14, marginTop: 26, ...rise(frame, seg.dur * 0.76, fps) }}>
+          {["One shared memory", "One token wallet", "One supervisor on Telegram"].map((t) => (
+            <span key={t} style={{ fontFamily: display, fontWeight: 700, fontSize: 26, padding: "12px 22px", borderRadius: 14, border: `1px solid ${C.green}`, color: C.fg }}>
+              {t}
+            </span>
+          ))}
+        </div>
       </div>
     </AbsoluteFill>
   );
@@ -255,7 +316,7 @@ function Stats() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const stats: [number, string][] = [
-    [6, "tasks done"],
+    [T.tasks, "tasks done"],
     [5, "agents, one team"],
     [T.costTokens, "tokens in total"],
     [0, "passwords shared"],
@@ -301,6 +362,25 @@ function Badge({ text }: { text: string }) {
     <div style={{ position: "absolute", right: 40, top: 34, display: "flex", alignItems: "center", gap: 12, padding: "12px 24px", borderRadius: 999, background: "rgba(11,17,15,.82)", border: "1px solid rgba(255,255,255,.14)", fontFamily: sans, fontWeight: 500, fontSize: 24, color: "#fff" }}>
       <span style={{ width: 12, height: 12, borderRadius: 6, background: C.spark }} />
       {text}
+    </div>
+  );
+}
+
+/** The day's clock and what just happened, top right during each event. */
+function EventChip() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const t = frame / fps;
+  const c = T.chips.find((x) => t >= x.start && t < x.end);
+  if (!c) return null;
+  const s = spring({ frame: frame - f(c.start), fps, config: { damping: 200 } });
+  const out = interpolate(t, [c.end - 0.3, c.end], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return (
+    <div style={{ position: "absolute", right: 40, top: 30, opacity: Math.min(s, out), transform: `translateY(${(1 - s) * -20}px)`, display: "flex", alignItems: "center", gap: 16, padding: "12px 24px", borderRadius: 999, background: "rgba(11,17,15,.88)", border: "1px solid rgba(255,255,255,.14)", boxShadow: "0 16px 40px rgba(0,0,0,.4)" }}>
+      <span style={{ fontFamily: mono, fontWeight: 500, fontSize: 26, color: C.spark }}>{c.clock}</span>
+      <span style={{ width: 1, height: 26, background: "rgba(255,255,255,.2)" }} />
+      <span style={{ fontFamily: sans, fontWeight: 600, fontSize: 24, color: "#fff" }}>{c.source}</span>
+      <span style={{ fontFamily: sans, fontSize: 24, color: C.muted }}>{c.what}</span>
     </div>
   );
 }
@@ -384,6 +464,7 @@ export const Demo = () => (
       <Sequence key={i} from={f(s.start)} durationInFrames={Math.max(1, f(s.dur))}>
         {s.kind === "cold" && <ColdOpen seg={s} />}
         {s.kind === "title" && <Title />}
+        {s.kind === "team" && <Team seg={s} />}
         {s.kind === "scene" && <Stage seg={{ ...s, index: i }} />}
         {s.kind === "arch" && <Architecture seg={s} />}
         {s.kind === "stats" && <Stats />}
@@ -391,6 +472,7 @@ export const Demo = () => (
       </Sequence>
     ))}
     <Callouts />
+    <EventChip />
     <Captions />
     <Sound />
   </AbsoluteFill>
