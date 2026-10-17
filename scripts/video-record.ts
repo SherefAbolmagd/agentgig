@@ -16,7 +16,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { chromium, type BrowserContext, type Locator, type Page } from "playwright";
 
@@ -71,6 +71,77 @@ class Screencast {
     const out = `${OUT}/${this.name}.mp4`;
     execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list, "-vf", `fps=60,scale=${this.w}:${this.h}:force_original_aspect_ratio=decrease,pad=${this.w}:${this.h}:(ow-iw)/2:0,format=yuv420p`, "-c:v", "libx264", "-preset", "medium", "-crf", "16", out]);
     return out;
+  }
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Where a page's content sits on the real screen (Windows, 100% scaling). */
+async function clientRect(page: Page): Promise<Rect> {
+  return page.evaluate(() => {
+    const border = (outerWidth - innerWidth) / 2;
+    return { x: screenX + border, y: screenY + outerHeight - innerHeight - border, w: innerWidth, h: innerHeight };
+  });
+}
+
+/**
+ * Pins the recorder's own Chrome windows (Playwright's Chromium, never the
+ * person's browser) always on top, so nothing else can slide into the
+ * recorded area. Returns how many windows were pinned.
+ */
+function pinOnTop(): number {
+  const ps = `
+Add-Type @"
+using System; using System.Runtime.InteropServices;
+public class Pin { [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags); }
+"@
+$n = 0
+Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*ms-playwright*' -and $_.MainWindowHandle -ne 0 } | ForEach-Object {
+  if ([Pin]::SetWindowPos($_.MainWindowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0013)) { $n++ }
+}
+$n`;
+  const out = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", ps], { encoding: "utf8" });
+  return Number(out.trim().split(/\s+/).pop());
+}
+
+/**
+ * Records a region of the real screen at a constant 60 fps (gdigrab, encoded
+ * on the graphics card): every frame the monitor showed, so motion is smooth.
+ */
+class ScreenCapture {
+  private proc?: ChildProcess;
+  /** Seconds after T0 when the first frame was taken. */
+  startedAt = 0;
+  constructor(private rect: Rect, private file: string) {}
+  async start() {
+    const { x, y, w, h } = this.rect;
+    this.proc = spawn(FFMPEG, [
+      "-y", "-f", "gdigrab", "-framerate", "60", "-draw_mouse", "0",
+      "-offset_x", String(x), "-offset_y", String(y), "-video_size", `${w}x${h}`, "-i", "desktop",
+      "-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "17", "-pix_fmt", "yuv420p", this.file,
+    ], { stdio: ["pipe", "ignore", "pipe"] });
+    await new Promise<void>((resolve, reject) => {
+      let log = "";
+      this.proc!.stderr!.on("data", (d: Buffer) => {
+        log += d.toString();
+        if (!this.startedAt && log.includes("Press [q]")) {
+          this.startedAt = Date.now() / 1000 - T0;
+          resolve();
+        }
+      });
+      this.proc!.on("exit", (code) => reject(new Error(`Screen capture stopped (${code}): ${log.slice(-400)}`)));
+    });
+  }
+  async stop() {
+    if (!this.proc || this.proc.exitCode !== null) return;
+    const done = new Promise((r) => this.proc!.once("exit", r));
+    this.proc.stdin!.write("q");
+    await done;
   }
 }
 
@@ -252,18 +323,27 @@ async function main() {
   // rendering drops frames. They open on a second monitor if there is one
   // (VIDEO_WINDOW_X, default -1920) and Chrome is told not to slow them down
   // when they're covered or out of focus.
+  // CAPTURE=screen (the default when windows are visible) records the monitor
+  // itself; CAPTURE=cdp uses Chrome's screencast, which drops frames under load.
   const headless = process.env.HEADLESS === "1";
+  const screen = !headless && process.env.CAPTURE !== "cdp";
   const winX = Number(process.env.VIDEO_WINDOW_X ?? -1920);
-  const smooth = ["--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-features=CalculateNativeWinOcclusion"];
-  const browser = await chromium.launch({ headless, args: [...smooth, `--window-position=${winX},0`, "--window-size=1300,1000"] });
-  const webCtx = await browser.newContext({ viewport: { width: 1280, height: 1080 }, deviceScaleFactor: 1, locale: "en-GB", timezoneId: "Europe/London" });
+  const smooth = ["--hide-crash-restore-bubble", "--no-default-browser-check", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-features=CalculateNativeWinOcclusion"];
+  // Side by side on one 1920×1080 monitor: 8 px invisible borders overlap; content is 1272 + 636 wide.
+  const webWindow = screen ? [`--window-position=${winX - 8},0`, "--window-size=1288,1088"] : [`--window-position=${winX},0`, "--window-size=1300,1000"];
+  const tgWindow = screen ? [`--window-position=${winX + 1264},0`, "--window-size=652,1088"] : [`--window-position=${winX + 1280},0`, "--window-size=660,1000"];
+  const view = (width: number) => (screen ? { viewport: null } : { viewport: { width, height: 1080 }, deviceScaleFactor: 1 });
+  // No "controlled by automated test software" bar: it takes 40 px of the page.
+  const quiet = { ignoreDefaultArgs: ["--enable-automation"] };
+  const browser = await chromium.launch({ headless, ...quiet, args: [...smooth, ...webWindow] });
+  const webCtx = await browser.newContext({ ...view(1280), locale: "en-GB", timezoneId: "Europe/London" });
   const web = new Person(await webCtx.newPage());
   await web.setup();
 
   let tgCtx: BrowserContext | undefined;
   let tg: Telegram | undefined;
   if (TG_PROFILE) {
-    tgCtx = await chromium.launchPersistentContext(TG_PROFILE, { headless, args: [...smooth, `--window-position=${winX + 1280},0`, "--window-size=660,1000"], viewport: { width: 640, height: 1080 }, locale: "en-GB", timezoneId: "Europe/London" });
+    tgCtx = await chromium.launchPersistentContext(TG_PROFILE, { headless, ...quiet, args: [...smooth, ...tgWindow], ...view(640), locale: "en-GB", timezoneId: "Europe/London" });
     const p = tgCtx.pages()[0] ?? (await tgCtx.newPage());
     tg = new Telegram(new Person(p));
     await tg.me.setup();
@@ -290,9 +370,28 @@ async function main() {
   await web.page.getByRole("heading", { name: /Good (morning|afternoon|evening)/ }).waitFor({ timeout: 30_000 });
   await web.page.waitForTimeout(1500);
 
-  const webCam = new Screencast(web.page, "web", 1280, 1080);
-  const tgCam = tg ? new Screencast(tg.page, "telegram", 640, 1080) : undefined;
-  await webCam.start();
+  // Screen mode: one recording of the area holding both pages, cropped apart later.
+  let capture: ScreenCapture | undefined;
+  let rects: Rect[] = [];
+  if (screen) {
+    await web.page.bringToFront();
+    await tg?.page.bringToFront();
+    const pinned = pinOnTop();
+    if (pinned < (tg ? 2 : 1)) throw new Error(`Only ${pinned} recording window(s) could be kept on top; not recording the screen.`);
+    await web.page.waitForTimeout(500);
+    rects = [await clientRect(web.page), ...(tg ? [await clientRect(tg.page)] : [])];
+    console.log("Pages on screen:", rects.map((r) => `${r.w}×${r.h} at ${r.x},${r.y}`).join(" | "));
+    const x0 = Math.min(...rects.map((r) => r.x));
+    const y0 = Math.min(...rects.map((r) => r.y));
+    const even = (n: number) => n - (n % 2);
+    const region = { x: x0, y: y0, w: even(Math.max(...rects.map((r) => r.x + r.w)) - x0), h: even(Math.max(...rects.map((r) => r.y + r.h)) - y0) };
+    rects = rects.map((r) => ({ ...r, x: r.x - x0, y: r.y - y0 }));
+    capture = new ScreenCapture(region, `${OUT}/screen.mp4`);
+    await capture.start();
+  }
+  const webCam = screen ? undefined : new Screencast(web.page, "web", 1280, 1080);
+  const tgCam = screen || !tg ? undefined : new Screencast(tg.page, "telegram", 640, 1080);
+  await webCam?.start();
   await tgCam?.start();
   await web.redraw();
   await tg?.me.redraw();
@@ -458,19 +557,27 @@ async function main() {
     process.exitCode = 1;
   } finally {
     const end = Date.now() / 1000 - T0;
+    await capture?.stop();
     await webCtx.close();
     await tgCtx?.close();
     await browser.close();
-    writeFileSync(`${OUT}/marks.json`, JSON.stringify(marks, null, 2));
+    // Marks are relative to the recording's first frame.
+    const shift = capture?.startedAt ?? 0;
+    writeFileSync(`${OUT}/marks.json`, JSON.stringify(marks.map((m) => ({ ...m, t: m.t - shift })), null, 2));
     console.log("Encoding…");
-    const webMp4 = webCam.encode(end);
-    const parts = [webMp4];
-    if (tgCam) parts.push(tgCam.encode(end));
     const raw = `${OUT}/raw.mp4`;
-    if (parts.length === 2) {
-      execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-i", parts[0], "-i", parts[1], "-filter_complex", "[0:v][1:v]hstack=inputs=2[v]", "-map", "[v]", "-c:v", "libx264", "-crf", "16", raw]);
+
+    if (capture) {
+      // Both pages cropped out at the same height and centred on a 1920×1080 frame.
+      const even = (n: number) => n - (n % 2);
+      const h = even(Math.min(...rects.map((r) => r.h)));
+      const crops = rects.map((r, i) => `[0:v]crop=${even(r.w)}:${h}:${r.x}:${r.y}[c${i}]`).join(";");
+      const stack = rects.length === 2 ? "[c0][c1]hstack=inputs=2[s]" : "[c0]null[s]";
+      execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-i", `${OUT}/screen.mp4`, "-filter_complex", `${crops};${stack};[s]pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x0e1412,fps=60[v]`, "-map", "[v]", "-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "17", "-pix_fmt", "yuv420p", raw]);
     } else {
-      execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-i", parts[0], "-vf", "pad=1920:1080:0:0:color=0x111111", "-c:v", "libx264", "-crf", "16", raw]);
+      const parts = [webCam!.encode(end), ...(tgCam ? [tgCam.encode(end)] : [])];
+      const layout = parts.length === 2 ? ["-filter_complex", "[0:v][1:v]hstack=inputs=2[v]", "-map", "[v]"] : ["-vf", "pad=1920:1080:0:0:color=0x111111"];
+      execFileSync(FFMPEG, ["-y", "-loglevel", "error", ...parts.flatMap((p) => ["-i", p]), ...layout, "-c:v", "libx264", "-crf", "16", raw]);
     }
     console.log(`✓ ${raw} (${end.toFixed(0)} s), marks in ${OUT}/marks.json`);
   }
