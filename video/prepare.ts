@@ -141,6 +141,18 @@ segments.push({ kind: "end", start: t, dur: END });
 t += END;
 const total = t;
 
+// Held frames are stills: a video frozen on its last frame renders blank in Remotion.
+let holds = 0;
+for (const seg of segments) {
+  if (!("pieces" in seg)) continue;
+  for (const x of seg.pieces) {
+    if (!x.hold) continue;
+    const n = holds++;
+    for (const page of ["web", "tg"]) ff(["-ss", Math.max(0, x.to - 1 / 60).toFixed(3), "-i", `${ROOT}/public/take/${page}.mp4`, "-frames:v", "1", "-q:v", "2", `${ROOT}/public/take/hold-${n}-${page}.jpg`]);
+    (x as Piece & { still?: number }).still = n;
+  }
+}
+
 /** Every output time showing a moment of the take (the cold open repeats some). */
 const toOutAll = (src: number): number[] =>
   segments.flatMap((s) => ("pieces" in s ? s.pieces.filter((x) => !x.hold && src >= x.from && src < x.to).map((x) => x.outStart + (src - x.from) / x.speed) : []));

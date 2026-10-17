@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { AbsoluteFill, Audio, Easing, Freeze, interpolate, OffthreadVideo, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio, Easing, Img, interpolate, OffthreadVideo, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { loadFont as loadDisplay } from "@remotion/google-fonts/BricolageGrotesque";
 import { loadFont as loadSans } from "@remotion/google-fonts/IBMPlexSans";
 import { loadFont as loadMono } from "@remotion/google-fonts/IBMPlexMono";
@@ -13,7 +13,7 @@ const mono = loadMono("normal", { weights: ["400", "500"], subsets: ["latin"] })
 
 const C = { bg: "#0b110f", card: "#151d1a", line: "#24302b", fg: "#e6eeea", muted: "#93a49c", green: "#3cc79f", spark: "#e7b451" };
 
-type Piece = { from: number; to: number; speed: number; hold?: number; outStart: number; outDur: number };
+type Piece = { from: number; to: number; speed: number; hold?: number; still?: number; outStart: number; outDur: number };
 type Seg = { kind: string; key?: string; start: number; dur: number; pieces?: Piece[] };
 type Ev = { t: number; page: "web" | "tg"; kind: "move" | "click" | "message"; x: number; y: number; w?: number; h?: number };
 const T = timeline as unknown as {
@@ -95,10 +95,8 @@ function Pieces({ pieces, page }: { pieces: Piece[]; page: "web" | "tg" }) {
     <>
       {pieces.map((p, i) => (
         <Sequence key={i} from={f(p.outStart)} durationInFrames={Math.max(1, f(p.outDur))} layout="none">
-          {p.hold ? (
-            <Freeze frame={0}>
-              <OffthreadVideo src={staticFile(`take/${page}.mp4`)} startFrom={f(p.to) - 1} muted style={{ width: "100%", height: "100%" }} />
-            </Freeze>
+          {p.still !== undefined ? (
+            <Img src={staticFile(`take/hold-${p.still}-${page}.jpg`)} style={{ width: "100%", height: "100%" }} />
           ) : (
             <OffthreadVideo src={staticFile(`take/${page}.mp4`)} startFrom={f(p.from)} playbackRate={p.speed} muted style={{ width: "100%", height: "100%" }} />
           )}
