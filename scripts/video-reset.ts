@@ -58,19 +58,18 @@ const FACTS: { shelf: "customers" | "money" | "stock" | "brand" | "team"; fact: 
 
 const CLEARED = ["tasks", "token_transactions", "approvals", "hires", "knowledge_sources", "style_examples", "invoice_keys", "memory"] as const;
 
-/** Subjects AgentGig's agents give their Gmail drafts (quotes, reorders, reminders, briefs…). */
-const AGENT_SUBJECT = /invoice|quote|reorder|order|brief|proposal|welcome|correct|payment|win|miss|lumen|willow|tender|candle|meeting|restock|stock|supply/i;
+/** AgentGig's agents started drafting in this Gmail on this day; older drafts are the owner's. */
+const AGENTS_SINCE = Date.parse("2026-10-16T00:00:00Z");
 
 async function deleteAgentDrafts(token: string): Promise<number> {
   const auth = { authorization: `Bearer ${token}` };
   const list = (await (await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=200", { headers: auth })).json()) as { drafts?: { id: string }[] };
   let deleted = 0;
   for (const d of list.drafts ?? []) {
-    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${d.id}?format=metadata&metadataHeaders=Subject`, { headers: auth });
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${d.id}?format=minimal`, { headers: auth });
     if (!r.ok) continue;
-    const m = (await r.json()) as { message?: { payload?: { headers?: { name: string; value: string }[] } } };
-    const subject = m.message?.payload?.headers?.find((h) => h.name.toLowerCase() === "subject")?.value ?? "";
-    if (subject && !AGENT_SUBJECT.test(subject)) continue;
+    const m = (await r.json()) as { message?: { internalDate?: string } };
+    if (Number(m.message?.internalDate ?? 0) < AGENTS_SINCE) continue;
     if ((await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${d.id}`, { method: "DELETE", headers: auth })).ok) deleted++;
   }
   return deleted;
@@ -125,7 +124,7 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
     await Promise.all(folder.files.map((f) => fetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } })));
   }
   // Delete the Gmail drafts earlier takes left, so the take's drafts are the only ones on
-  // screen: drafts whose subject looks like an agent's, or that have none. Others stay.
+  // screen: everything drafted since the agents started here. The owner's older drafts stay.
   if (conn) await deleteAgentDrafts(await accessToken(conn));
   // The spend sheet AgentGig made: clear earlier takes' rows, keep the header.
   const sheetId = conn?.meta?.spendSheetId as string | undefined;
