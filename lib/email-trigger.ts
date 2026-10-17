@@ -108,7 +108,8 @@ export async function onGmailPush(emailAddress: string, historyId: string): Prom
   return queued ? `queued ${queued}` : "nothing new";
 }
 
-const SKIP_LABELS = ["SENT", "DRAFT", "SPAM", "TRASH", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL"];
+// Not SENT: Gmail also marks mail from the owner's own plus-addresses as sent. The owner's own replies are caught by the sender check below.
+const SKIP_LABELS = ["DRAFT", "SPAM", "TRASH", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL"];
 
 /** One new email: Ada picks the agent it belongs to (or none), then that agent's task runs. */
 export async function routeEmail(userId: string, messageId: string, key: string) {

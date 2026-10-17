@@ -7,8 +7,11 @@
  *
  * Creates, once (re-runs reuse the products and skip orders already made): six products with
  * stock (two running low), this week's orders that sell them, one shipped
- * order with Royal Mail tracking for the "where's my order?" email, and four
- * customers who last ordered three to four months ago (Win-back).
+ * order with Royal Mail tracking for the "where's my order?" email, a
+ * delivered order for the refund request, and four customers who last
+ * ordered three to four months ago (Win-back). Sophie and Emma get
+ * plus-addresses of the store's Gmail (scripts/video-inbox.ts), because
+ * agents email them on camera.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -42,7 +45,7 @@ const PRODUCTS: { title: string; sku: string; price: string; stock: number }[] =
 
 type Line = [sku: string, qty: number];
 const RECENT: [string, string, string, Line[]][] = [
-  ["Emma", "Clarke", "emma.clarke@example.com", [["WW-FIG", 2]]],
+  ["Ella", "Clarke", "ella.clarke@example.com", [["WW-FIG", 2]]],
   ["Tom", "Reid", "tom.reid@example.com", [["WW-SAGE", 1], ["WW-MATCH", 1]]],
   ["Aisha", "Khan", "aisha.khan@example.com", [["WW-GIFT", 1]]],
   ["Lucy", "Fernandes", "lucy.f@example.com", [["WW-MELT", 3]]],
@@ -61,7 +64,9 @@ const LAPSED: [string, string, string, number, Line[]][] = [
   ["Ruby", "Collins", "ruby.collins@example.com", 112, [["WW-VET", 2]]],
   ["Sam", "Turner", "sam.turner@example.com", 121, [["WW-SAGE", 1], ["WW-MELT", 1]]],
 ];
-const SHIPPED: [string, string, string, Line[]] = ["Sophie", "Turner", "sophie.turner@example.com", [["WW-FIG", 2], ["WW-MATCH", 1]]];
+const SHIPPED: [string, string, Line[]] = ["Sophie", "Turner", [["WW-FIG", 2], ["WW-MATCH", 1]]];
+/** Delivered last week; Emma emails on camera that the candle arrived cracked. Stripe holds the matching payment. */
+const DELIVERED: [string, string, Line[]] = ["Emma", "Clarke", [["WW-FIG", 1], ["WW-MATCH", 1]]];
 
 async function main() {
   const { keyFields } = await import("@/lib/connectors/keys");
@@ -155,12 +160,20 @@ async function main() {
     );
   }
   console.log(`✓ ${LAPSED.length} customers who last ordered 3–4 months ago, subscribed to emails`);
-  const shipped = await order(...SHIPPED, {
+  const { videoAddresses } = await import("./video-inbox");
+  const to = await videoAddresses();
+  const shipped = await order(SHIPPED[0], SHIPPED[1], to.sophie, SHIPPED[2], {
     processedAt: daysAgo(4),
     fulfillmentStatus: "FULFILLED",
     fulfillment: { locationId: location, trackingCompany: "Royal Mail", trackingNumber: "RM482190635GB", notifyCustomer: false, shipmentStatus: "IN_TRANSIT" },
   });
   console.log(`✓ ${shipped.name}: shipped 4 days ago with Royal Mail tracking (the "where's my order?" email)`);
+  const delivered = await order(DELIVERED[0], DELIVERED[1], to.emma, DELIVERED[2], {
+    processedAt: daysAgo(8),
+    fulfillmentStatus: "FULFILLED",
+    fulfillment: { locationId: location, trackingCompany: "Royal Mail", trackingNumber: "RM482177214GB", notifyCustomer: false, shipmentStatus: "DELIVERED" },
+  });
+  console.log(`✓ ${delivered.name}: delivered (the refund request); pay for it in Stripe with video-seed-stripe.ts ${delivered.name}`);
   for (const [first, last, email, lines] of RECENT) await order(first, last, email, lines);
   console.log(`✓ ${RECENT.length} orders this week`);
 }

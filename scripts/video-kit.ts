@@ -377,8 +377,6 @@ export interface Stage {
  */
 export async function openStage(opts: { out: string; tgProfile?: string; micFile?: string; googleProfile?: string }): Promise<Stage> {
   const take = new Take(opts.out);
-  const password = process.env.VIDEO_PASSWORD;
-  if (!password) throw new Error("Set VIDEO_PASSWORD to the video account's password.");
   const { resetVideoAccount, VIDEO } = await import("./video-reset");
   console.log("Resetting the video account…");
   await resetVideoAccount();
@@ -422,6 +420,9 @@ export async function openStage(opts: { out: string; tgProfile?: string; micFile
   const email = web.page.getByLabel("Email");
   await Promise.race([home.waitFor({ timeout: 30_000 }), email.waitFor({ timeout: 30_000 })]);
   if (!(await home.isVisible())) {
+    // Only needed when the kept profile isn't signed in any more.
+    const password = process.env.VIDEO_PASSWORD;
+    if (!password) throw new Error("Set VIDEO_PASSWORD to the video account's password.");
     if ((await web.page.getByRole("button", { name: "Sign in", exact: true }).count()) === 0) {
       await web.page.getByRole("button", { name: "Sign in" }).last().click();
     }

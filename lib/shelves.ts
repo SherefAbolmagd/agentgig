@@ -28,6 +28,7 @@ const AGENT_SHELVES: Record<string, { read: Shelf[]; write: Shelf[] }> = {
   "cashflow-forecast": { read: ["money"], write: ["money"] },
   "deal-nudger": { read: ["customers", "money"], write: ["customers"] },
   "quote-builder": { read: ["customers", "stock"], write: ["customers"] },
+  "payment-rescue": { read: ["customers", "brand"], write: ["customers"] },
   "booking-assistant": { read: ["customers", "team"], write: ["customers"] },
   rotabuilder: { read: ["team"], write: ["team"] },
   "hiring-assistant": { read: ["team"], write: ["team"] },

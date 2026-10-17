@@ -192,7 +192,7 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
     const res = await generateJson({
       tier: "flash",
       system:
-        "You write short, polite purchase-order emails from a small business to its suppliers, one per supplier, listing exactly the quantities given. Sign off with the business name. Then summarise for the owner what's running low.",
+        "You write short, polite purchase-order emails from a small business to its suppliers, one per supplier, listing exactly the quantities given. Sign off with the business name. Then summarise for the owner what's running low. Nothing has been ordered yet: the emails go only once the owner approves.",
       parts: [textPart(`${groundingPrompt(grounding)}\n\nLead time ${input.leadTimeDays} days.\n\n${brief}`)],
       schema: EmailSchema,
       temperature: 0.3,

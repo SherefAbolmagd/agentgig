@@ -38,23 +38,29 @@ const STORE = {
   },
 } as const;
 
-/** The team Sam already has when the video starts; Win-back is hired on camera. */
+/** Sam's team when the video starts: every agent starts on an event, nobody types a task. */
 const TEAM: { agentId: string; triggerId: string; approvalMode: "ask" | "auto"; priceList?: true }[] = [
+  { agentId: "inventory-guardian", triggerId: "order", approvalMode: "ask" },
   { agentId: "order-desk", triggerId: "email", approvalMode: "ask" },
-  { agentId: "inventory-guardian", triggerId: "daily-0700", approvalMode: "ask" },
-  { agentId: "revenue-pulse", triggerId: "mon-0800", approvalMode: "ask" },
-  { agentId: "quote-builder", triggerId: "email", approvalMode: "ask", priceList: true },
+  { agentId: "payment-rescue", triggerId: "payment-failed", approvalMode: "ask" },
   { agentId: "receipthero", triggerId: "drive", approvalMode: "ask" },
+  { agentId: "quote-builder", triggerId: "email", approvalMode: "ask", priceList: true },
 ];
 
-/** What the team already knows about the store; the Customers fact waits for Sam's OK. */
-const FACTS: { shelf: "customers" | "money" | "stock" | "brand" | "team"; fact: string; pending?: true }[] = [
-  { shelf: "stock", fact: "Fig & Cedar is the best seller; reorder from Calder Candle Co. when fewer than 10 are left." },
+type Fact = { shelf: "customers" | "money" | "stock" | "brand" | "team"; fact: string; pending?: true };
+
+/** What the team already knows about the store. Northside's habit is what Quote Builder uses on camera. */
+const facts = (calder: string): Fact[] => [
+  { shelf: "stock", fact: `Fig & Cedar is the best seller. Calder Candle Co. pours our candles; send reorders to ${calder}.` },
   { shelf: "money", fact: "Northern Wax Co. invoices are due 30 days after delivery." },
-  { shelf: "brand", fact: "Customer emails are signed \"Sam at Willow & Wick\" and never use exclamation marks more than once." },
+  { shelf: "brand", fact: 'Customer emails are signed "Sam at Willow & Wick" and never use exclamation marks more than once.' },
   { shelf: "team", fact: "Priya packs and ships orders Monday to Thursday; Leo answers customer emails." },
-  { shelf: "customers", fact: "Northside Interiors usually pays wholesale invoices about three weeks late.", pending: true },
+  { shelf: "customers", fact: "Northside Interiors usually pays wholesale invoices about three weeks late, so ask them for a 50% deposit." },
+  { shelf: "customers", fact: "Aisha Khan buys an Autumn gift set every October.", pending: true },
 ];
+
+/** Shopify stock at the start of a take (the take's own orders take it down). */
+const STOCK: Record<string, number> = { "WW-FIG": 4, "WW-SAGE": 7, "WW-VET": 31, "WW-MELT": 3, "WW-GIFT": 14, "WW-MATCH": 80 };
 
 const CLEARED = ["tasks", "token_transactions", "approvals", "hires", "knowledge_sources", "style_examples", "invoice_keys", "memory"] as const;
 
@@ -75,7 +81,33 @@ async function deleteAgentDrafts(token: string): Promise<number> {
   return deleted;
 }
 
+/** Puts the demo store's stock back, so the take's new order runs Fig & Cedar low again. */
+async function resetStock() {
+  const { keyFields } = await import("@/lib/connectors/keys");
+  const k = await keyFields(VIDEO.uid, "shopify");
+  if (!k) return;
+  const gql = async <T>(query: string, variables: Record<string, unknown> = {}): Promise<T> => {
+    const res = await fetch(`https://${k.fields.shopDomain}/admin/api/2025-07/graphql.json`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-shopify-access-token": k.fields.accessToken },
+      body: JSON.stringify({ query, variables }),
+    });
+    const body = (await res.json()) as { data: T; errors?: { message: string }[] };
+    if (body.errors?.length) throw new Error(`Shopify: ${body.errors[0].message}`);
+    return body.data;
+  };
+  const location = (await gql<{ locations: { nodes: { id: string }[] } }>(`{ locations(first: 1) { nodes { id } } }`)).locations.nodes[0].id;
+  const variants = (await gql<{ productVariants: { nodes: { sku: string | null; inventoryItem: { id: string } }[] } }>(`{ productVariants(first: 50, query: "sku:WW-*") { nodes { sku inventoryItem { id } } } }`)).productVariants.nodes;
+  const quantities = variants.filter((v) => v.sku && v.sku in STOCK).map((v) => ({ inventoryItemId: v.inventoryItem.id, locationId: location, quantity: STOCK[v.sku!] }));
+  await gql(
+    `mutation($input: InventorySetQuantitiesInput!) { inventorySetQuantities(input: $input) { userErrors { message } } }`,
+    { input: { name: "available", reason: "correction", ignoreCompareQuantity: true, quantities } },
+  );
+}
+
 export async function resetVideoAccount(): Promise<{ password?: string }> {
+  // Shopify and Stripe need a public address to call when the team is hired below.
+  process.env.PUBLIC_URL ??= "https://agentexchange-653235000565.us-central1.run.app";
   const { FieldValue } = await import("firebase-admin/firestore");
   const { Storage } = await import("@google-cloud/storage");
   const { adminAuth, db } = await import("@/lib/firebase-admin");
@@ -126,13 +158,17 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   // Delete the Gmail drafts earlier takes left, so the take's drafts are the only ones on
   // screen: everything drafted since the agents started here. The owner's older drafts stay.
   if (conn) await deleteAgentDrafts(await accessToken(conn));
-  // The customers' emails earlier takes delivered to the inbox go to the bin.
-  if (conn) {
+  // Emails to and from the video's people (earlier takes) go to the bin.
+  const { videoAddresses } = await import("./video-inbox");
+  const people = conn ? await videoAddresses() : null;
+  if (conn && people) {
     const auth = { authorization: `Bearer ${await accessToken(conn)}` };
-    const q = encodeURIComponent("from:(sophie.turner@example.com OR hannah@hearthandhome.example)");
-    const found = (await (await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=100`, { headers: auth })).json()) as { messages?: { id: string }[] };
+    const who = [...Object.values(people), "sophie.turner@example.com", "hannah@hearthandhome.example"];
+    const q = encodeURIComponent(`{${who.map((a) => `from:${a} to:${a}`).join(" ")}}`);
+    const found = (await (await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=200`, { headers: auth })).json()) as { messages?: { id: string }[] };
     for (const m of found.messages ?? []) await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/trash`, { method: "POST", headers: auth });
   }
+  await resetStock();
   // The spend sheet AgentGig made: clear earlier takes' rows, keep the header.
   const sheetId = conn?.meta?.spendSheetId as string | undefined;
   if (conn && sheetId) {
@@ -163,6 +199,8 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
     tokensHeld: 0,
     tokensSpent: 0,
     businessProfile: STORE.profile,
+    // On camera, approving an email sends it, so the sent email can be shown.
+    emailOnApprove: "send",
     // Not a sandbox: the daily cleanup must leave it alone.
     isDemo: false,
     createdAt: existing.exists ? existing.get("createdAt") : FieldValue.serverTimestamp(),
@@ -180,7 +218,7 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   const { id: priceListId } = await addKnowledge(uid, { name: "wholesale-price-list.md", mimeType: "text/markdown", data: readFileSync("fixtures/video/wholesale-price-list.md") });
   for (const { priceList, ...h } of TEAM) await hireAgent(uid, { ...h, knowledgeAccess: priceList ? ["profile", priceListId] : ["profile"] });
   const batch = store.batch();
-  for (const f of FACTS) {
+  for (const f of facts(people?.calder ?? "orders@caldercandle.example")) {
     batch.set(store.collection(COLLECTIONS.memory).doc(), {
       userId: uid,
       shelf: f.shelf,

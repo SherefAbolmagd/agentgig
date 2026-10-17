@@ -154,12 +154,18 @@ Alex, barista, 20, Mon Tue
 Mei, roaster, 35,
 Sam, owner, 20, Fri`;
 
+/** The Northern Wax invoice; the take swaps in an address that really receives ReceiptHero's correction email. */
+export function waxInvoicePdf(contact = "accounts@northernwax.example"): string {
+  const lines = waxInvoice.map(([x, y, size, text, bold]) => [x, y, size, text.replace("accounts@northernwax.example", contact), bold] as PdfLine);
+  return buildPdf(lines, "0.6 w 50 662 m 545 662 l S 360 552 m 545 552 l S");
+}
+
 export function writeVideoFixtures() {
   mkdirSync(DIR, { recursive: true });
   writeFileSync(`${DIR}/invoice-INV-21407.pdf`, buildPdf(invoice, "0.6 w 50 662 m 545 662 l S 360 534 m 545 534 l S"));
   writeFileSync(`${DIR}/invoice-BD-5582.pdf`, buildPdf(cleanInvoice, "0.6 w 50 662 m 545 662 l S 360 570 m 545 570 l S"));
   writeFileSync(`${DIR}/catering-price-list.md`, priceList);
-  writeFileSync(`${DIR}/invoice-NW-3317.pdf`, buildPdf(waxInvoice, "0.6 w 50 662 m 545 662 l S 360 552 m 545 552 l S"));
+  writeFileSync(`${DIR}/invoice-NW-3317.pdf`, waxInvoicePdf());
   writeFileSync(`${DIR}/catering-enquiry.txt`, enquiry);
   writeFileSync(`${DIR}/google-review.txt`, review);
   writeFileSync(`${DIR}/staff.csv`, staff);

@@ -5,6 +5,8 @@
  * a read-only restricted key).
  *
  *   STRIPE=<path to stripe.exe> npx tsx scripts/video-seed-stripe.ts
+ *   STRIPE=... npx tsx --conditions=react-server scripts/video-seed-stripe.ts --refund "#1006"
+ *       only Emma's payment for her delivered Shopify order (the refund request)
  *
  * Creates this week's paid orders and one declined card. Stripe won't take an
  * invoice due in the past, and test-clock data (its way round that) is hidden
@@ -37,7 +39,31 @@ const THIS_WEEK: [string, string, number, string][] = [
 ];
 const DECLINED: [string, string, number, string] = ["Ben Walsh", "ben.walsh@example.com", 4800, "#1050 · Autumn gift set"];
 
+/** Emma's card payment for the order she asks to refund, tagged with its Shopify number. */
+async function refundable(orderName: string) {
+  const { config } = await import("dotenv");
+  config({ path: ".env.local" });
+  const { videoAddresses, PEOPLE } = await import("./video-inbox");
+  const email = (await videoAddresses()).emma;
+  const cust = call("post", "/v1/customers", { name: PEOPLE.emma.name, email, "metadata[source]": TAG }).id;
+  const pi = call("post", "/v1/payment_intents", {
+    amount: 2800,
+    currency: "gbp",
+    customer: cust,
+    description: `${orderName} · Fig & Cedar candle, Long matches`,
+    payment_method: "pm_card_visa",
+    "automatic_payment_methods[enabled]": "true",
+    "automatic_payment_methods[allow_redirects]": "never",
+    confirm: "true",
+    "metadata[order]": orderName,
+    "metadata[source]": TAG,
+  });
+  console.log(`✓ Emma's £28.00 payment for ${orderName}: ${pi.id}`);
+}
+
 function main() {
+  const i = process.argv.indexOf("--refund");
+  if (i > 0) return void refundable(process.argv[i + 1]).then(() => process.exit(0), (err) => (console.error(err), process.exit(1)));
   const customers = new Map<string, string>();
   const customer = (name: string, email: string, clock?: string) => {
     if (!customers.has(email)) {

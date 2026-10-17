@@ -1,54 +1,54 @@
 /**
- * Records the raw take of the demo video: "a week at Willow & Wick", an
- * online candle store run from Sam's phone. Everything happens for real on
+ * Records the raw take of the demo video: "a day at Willow & Wick", an online
+ * candle store where nobody types a task. Each agent starts because something
+ * happened (a Shopify order, a customer's email, a declined card in Stripe, an
+ * invoice in Drive); Sam only answers Ada on Telegram, and approved emails are
+ * sent, so the take shows them in Gmail. Everything happens for real on
  * agentgig.si, Telegram, Shopify, Stripe and Google; see scripts/video-kit.ts
  * for how it's driven and recorded, and video/prepare.ts for the edit.
  *
- *   VIDEO_PASSWORD=... FFMPEG=<path> npx tsx --conditions=react-server scripts/video-record.ts \
- *     <out-dir> <telegram-profile-dir> <edge-google-profile-dir> <sam-voice-note.wav>
+ *   FFMPEG=<path> STRIPE=<stripe.exe> npx tsx --conditions=react-server scripts/video-record.ts \
+ *     <out-dir> <telegram-profile-dir> <edge-profile-dir>
  *
- * Before a take: Shopify connected and seeded (video-connect-shopify.ts, run
- * again within 24 h; video-seed-shopify.ts), Stripe connected (Revenue Pulse;
- * skipped when it isn't), Google connected and signed in on the Edge profile
- * (video-google-login.ts) with Gmail access for the email trigger, Telegram
- * linked, and the LabelWise partner running.
- * Earlier takes (Café Lumen) are in git history.
+ * Before a take: Shopify connected (video-connect-shopify.ts, again within
+ * 24 h) and seeded (video-seed-shopify.ts, video-seed-stripe.ts --refund),
+ * Stripe connected with a key that can refund, make Checkout links and
+ * webhooks, Google connected with Gmail access, Telegram linked, and the Edge
+ * profile signed in to Google, the Shopify admin and the Stripe dashboard
+ * (video-google-login.ts). Earlier takes are in git history.
  */
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import type { Page } from "playwright";
 import { FIX, openStage } from "./video-kit";
+import { PEOPLE, VIDEO_UID as UID, videoAddresses } from "./video-inbox";
+import { waxInvoicePdf } from "./video-fixtures";
 
-const [OUT, TG_PROFILE, GOOGLE_PROFILE, MIC] = process.argv.slice(2);
-if (!OUT || !TG_PROFILE || !GOOGLE_PROFILE || !MIC) throw new Error("Usage: video-record.ts <out-dir> <telegram-profile-dir> <edge-google-profile-dir> <sam-voice-note.wav>");
-const UID = "video-cafe-lumen";
-const LABELWISE_URL = process.env.LABELWISE_URL ?? "https://labelwise-allergens-653235000565.us-central1.run.app";
-const VOICE_SECONDS = (readFileSync(MIC).length - 44) / (48000 * 2);
+const [OUT, TG_PROFILE, EDGE_PROFILE] = process.argv.slice(2);
+if (!OUT || !TG_PROFILE || !EDGE_PROFILE) throw new Error("Usage: video-record.ts <out-dir> <telegram-profile-dir> <edge-profile-dir>");
+const STRIPE = process.env.STRIPE ?? "stripe";
+const STRIPE_DASH = "https://dashboard.stripe.com/acct_1URSo9IS6Zq3Nf2S/test";
+const SHOPIFY_ADMIN = "https://admin.shopify.com/store/willow-and-wick";
+/** What Ada posts once an approved task is delivered. */
+const DONE = /sent from Gmail|saved as a draft|Nothing was sent|Refunded/;
 
 async function main() {
-  const { readSecret } = await import("@/lib/secrets");
+  const { db } = await import("@/lib/firebase-admin");
   const { getConnection } = await import("@/lib/connectors");
+  const { keyFields } = await import("@/lib/connectors/keys");
   const { driveListInvoices } = await import("@/lib/connectors/google");
   const { accessToken } = await import("@/lib/connectors/tokens");
   const { queueDriveInvoices } = await import("@/lib/triggers");
-  const apiKey = await readSecret("projects/agentexchange-hackathon/secrets/labelwise-api-key");
-  const stripe = !!(await getConnection(UID, "stripe"));
-
-  const stage = await openStage({ out: OUT, tgProfile: TG_PROFILE, micFile: MIC, googleProfile: GOOGLE_PROFILE });
-  const { web, mark } = stage;
-  const tg = stage.tg!;
-  const p = web.page;
-  const runButton = () => p.getByRole("button", { name: /Run now · \d+ tokens/ });
-  const resultPanel = () => p.getByRole("heading", { name: "Result" }).locator("xpath=ancestor::section[1]");
-  const gmailDrafts = "https://mail.google.com/mail/u/0/#drafts";
-  const gmailInbox = "https://mail.google.com/mail/u/0/#inbox";
+  const to = await videoAddresses();
+  const google = async () => accessToken((await getConnection(UID, "google"))!);
 
   /** A customer's email lands in the store's Gmail inbox (Gmail's insert, as if delivered). AgentGig's Gmail push does the rest. */
   async function arrive(fromName: string, fromEmail: string, subject: string, body: string) {
-    const token = await accessToken((await getConnection(UID, "google"))!);
     const raw = [
       `From: ${fromName} <${fromEmail}>`,
       `Subject: ${subject}`,
       `Date: ${new Date().toUTCString()}`,
-      `Message-ID: <${Date.now()}.${Math.random().toString(36).slice(2)}@${fromEmail.split("@")[1]}>`,
+      `Message-ID: <${Date.now()}.${Math.random().toString(36).slice(2)}@video.agentgig.si>`,
       "MIME-Version: 1.0",
       'Content-Type: text/plain; charset="UTF-8"',
       "",
@@ -56,175 +56,214 @@ async function main() {
     ].join("\r\n");
     const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?internalDateSource=dateHeader", {
       method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${await google()}`, "content-type": "application/json" },
       body: JSON.stringify({ raw: Buffer.from(raw).toString("base64url"), labelIds: ["INBOX", "UNREAD"] }),
     });
     if (!res.ok) throw new Error(`Gmail insert failed: ${res.status} ${await res.text()}`);
   }
 
-  await stage.run(async () => {
-    /* 1 · Cold open: a customer emails "where's my order?"; Order Desk picks it up */
-    mark("cold");
-    await arrive("Sophie Turner", "sophie.turner@example.com", "Where is my order #1010?", readFileSync(`${FIX}/order-question.txt`, "utf8"));
-    await web.glance(gmailInbox, (g) => g.getByText("Where is my order #1010?").filter({ visible: true }).first(), 2500);
-    mark("cold email");
-    const reply = await tg.waitFor(/emailed about an order/);
-    mark("cold draft");
-    await tg.me.point(reply);
-    await tg.me.pause(2200);
-    await tg.tap(reply, "Approve");
-    await tg.waitFor(/Approved/);
-    mark("cold approved");
+  /** A customer places an order on the shop (Admin API); Shopify's webhook does the rest. */
+  async function placeOrder(email: string, first: string, last: string, sku: string, quantity: number): Promise<string> {
+    const k = (await keyFields(UID, "shopify"))!;
+    const gql = async <T>(query: string, variables: Record<string, unknown> = {}) => {
+      const r = await fetch(`https://${k.fields.shopDomain}/admin/api/2025-07/graphql.json`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-shopify-access-token": k.fields.accessToken },
+        body: JSON.stringify({ query, variables }),
+      });
+      const body = (await r.json()) as { data: T; errors?: { message: string }[] };
+      if (body.errors?.length) throw new Error(`Shopify: ${body.errors[0].message}`);
+      return body.data;
+    };
+    const v = (await gql<{ productVariants: { nodes: { id: string; price: string }[] } }>(`query($q: String!) { productVariants(first: 1, query: $q) { nodes { id price } } }`, { q: `sku:${sku}` })).productVariants.nodes[0];
+    const made = await gql<{ orderCreate: { order: { name: string } | null; userErrors: { message: string }[] } }>(
+      `mutation($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) { orderCreate(order: $order, options: $options) { order { name } userErrors { message } } }`,
+      {
+        order: {
+          currency: "GBP",
+          email,
+          customer: { toUpsert: { email, firstName: first, lastName: last } },
+          lineItems: [{ variantId: v.id, quantity }],
+          financialStatus: "PAID",
+          transactions: [{ kind: "SALE", status: "SUCCESS", amountSet: { shopMoney: { amount: (Number(v.price) * quantity).toFixed(2), currencyCode: "GBP" } } }],
+        },
+        options: { inventoryBehaviour: "DECREMENT_IGNORING_POLICY", sendReceipt: false },
+      },
+    );
+    if (!made.orderCreate.order) throw new Error(`Shopify order failed: ${made.orderCreate.userErrors[0]?.message}`);
+    return made.orderCreate.order.name;
+  }
 
-    /* 3 · Home */
-    mark("scene 3 home");
-    await web.go("/workforce");
-    await web.pause(1200);
-    await web.show(p.locator("header").getByText(/tokens?/i).first(), 1200);
-    await web.scroll(420);
-    await web.pause(1300);
-    await web.scroll(-420);
+  /** A card is declined at checkout (Stripe sandbox, through the CLI); Stripe's webhook does the rest. */
+  function declineCard(name: string, email: string, amount: number, description: string): string {
+    const call = (path: string, fields: Record<string, string | number>) => {
+      let out: string;
+      try {
+        out = execFileSync(STRIPE, ["post", path, ...Object.entries(fields).flatMap(([k, v]) => ["-d", `${k}=${v}`])], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      } catch (err) {
+        out = String((err as { stdout?: string }).stdout ?? "");
+      }
+      return JSON.parse(out.slice(out.indexOf("{"))) as { id?: string; error?: { payment_intent?: { id: string } } };
+    };
+    const customer = call("/v1/customers", { name, email, "metadata[source]": "agentgig-video" }).id!;
+    const res = call("/v1/payment_intents", {
+      amount,
+      currency: "gbp",
+      customer,
+      description,
+      payment_method: "pm_card_chargeDeclined",
+      "automatic_payment_methods[enabled]": "true",
+      "automatic_payment_methods[allow_redirects]": "never",
+      confirm: "true",
+      "metadata[source]": "agentgig-video",
+    });
+    return res.error?.payment_intent?.id ?? res.id ?? "";
+  }
 
-    /* 4 · Stock: Inventory Guardian reads Shopify (it runs by itself at 07:00) */
-    mark("scene 4 stock");
-    await web.go("/workforce?agent=inventory-guardian");
-    await runButton().waitFor({ timeout: 30_000 });
-    await web.show(p.getByText(/Live stock from/).first(), 900);
-    await web.click(runButton());
-    const reorder = await tg.waitFor(/Reorder/);
-    mark("stock ready");
-    await web.show(resultPanel(), 2500);
-    await tg.tap(reorder, "Approve");
-    await tg.waitFor(/Approved/, 1);
-    mark("stock approved");
-    await web.glance(gmailDrafts, (g) => g.getByRole("main"), 3000);
-    mark("drafts shown");
-
-    /* 5 · Voice note: how did the week go? (Revenue Pulse reads Stripe) */
-    if (stripe) {
-      mark("scene 5 revenue");
-      const before = await tg.incoming(/£|GBP|takings|revenue/i).count();
-      await tg.voice(VOICE_SECONDS);
-      mark("voice sent");
-      await tg.waitFor(/£|GBP|takings|revenue/i, before);
-      mark("revenue posted");
-      await tg.me.pause(2500);
+  /** The newest delivered task of an agent: its links (sent email, Stripe refund). */
+  async function delivered(agentId: string): Promise<{ label: string; url: string }[]> {
+    for (let i = 0; i < 30; i++) {
+      const snap = await db().collection("tasks").where("userId", "==", UID).where("agentId", "==", agentId).where("status", "==", "delivered").get();
+      const newest = snap.docs.map((d) => d.data()).sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis())[0];
+      if (newest?.delivery?.links?.length) return newest.delivery.links;
+      await new Promise((r) => setTimeout(r, 1000));
     }
+    return [];
+  }
+  const sentLink = (links: { label: string; url: string }[]) => links.find((l) => /sent|Sent/.test(l.label))?.url ?? links.find((l) => l.url.includes("mail.google.com"))?.url;
 
-    /* 6 · Hire Win-back */
-    mark("scene 6 hire");
+  const stage = await openStage({ out: OUT, tgProfile: TG_PROFILE, googleProfile: EDGE_PROFILE });
+  const { web, mark } = stage;
+  const tg = stage.tg!;
+  const p = web.page;
+  const gmailInbox = "https://mail.google.com/mail/u/0/#inbox";
+  const subjectIn = (g: Page, subject: string) => g.getByText(subject).filter({ visible: true }).first();
+  /** Shows a sent email in Gmail: the thread, with the customer's email and the reply. */
+  const showSent = async (url: string | undefined, hold = 3500) => {
+    if (url) await web.glance(url, (g) => g.locator("div[role=main] h2").filter({ visible: true }).first(), hold);
+  };
+  const approve = async (bubble: Awaited<ReturnType<typeof tg.waitFor>>) => {
+    const before = await tg.incoming(DONE).count();
+    await tg.me.point(bubble);
+    await tg.me.pause(1800);
+    await tg.tap(bubble, "Approve");
+    await tg.waitFor(DONE, before);
+  };
+
+  await stage.run(async () => {
+    /* Tour: the team, their triggers and the shared memory */
+    mark("tour team");
+    await web.go("/workforce");
+    await web.pause(1500);
+    await web.scroll(380);
+    await web.pause(1800);
+    await web.scroll(-380);
+    mark("tour memory");
+    await web.go("/memory");
+    await web.pause(2500);
+    mark("tour marketplace");
     await web.click(p.getByRole("link", { name: "Marketplace" }));
     await web.redraw();
-    const card = p.locator("article", { hasText: "Win-back" });
-    await web.show(card, 900);
-    await web.click(card.getByRole("button", { name: /^Hire/ }));
-    const dialog = p.getByRole("dialog");
-    await dialog.waitFor();
-    await web.show(dialog.getByText(/Connected/).first(), 900);
-    await web.click(dialog.getByText("Ask me first"));
-    await web.type(dialog.getByLabel("Monthly token limit"), "30");
-    await web.click(dialog.getByRole("button", { name: "Hire Win-back" }));
-    await p.getByText("Win-back joined your team.").waitFor({ timeout: 20_000 });
-    mark("hired");
+    await web.show(p.locator("article", { hasText: "Payment Rescue" }).first(), 2200);
 
-    /* 7 · Win-back finds customers who stopped ordering */
-    mark("scene 7 winback");
-    await web.go("/workforce?agent=winback");
-    await runButton().waitFor({ timeout: 30_000 });
-    await web.click(runButton());
-    const winback = await tg.waitFor(/win-back emails? ready/i);
-    mark("winback ready");
-    await web.show(resultPanel(), 2500);
-    await tg.tap(winback, "Approve");
-    await tg.waitFor(/Approved/, 2);
-    mark("winback approved");
+    /* Telegram: linked once, then the team comes to Sam */
+    mark("tour telegram");
+    await web.go("/team");
+    await web.show(p.getByText(/Telegram/).first(), 2500);
+    await web.go("/workforce");
 
-    /* 8 · A wholesale enquiry arrives by email and becomes a quote */
-    mark("scene 8 quote");
-    await arrive("Hannah Price", "hannah@hearthandhome.example", "Wholesale: 40 Autumn gift sets", readFileSync(`${FIX}/wholesale-enquiry.txt`, "utf8"));
-    await web.glance(gmailInbox, (g) => g.getByText("Wholesale: 40 Autumn gift sets").filter({ visible: true }).first(), 2500);
-    mark("quote email");
-    const quote = await tg.waitFor(/emailed for a quote/);
-    mark("quote posted");
-    await tg.me.point(quote);
-    await tg.me.pause(2200);
-    await tg.tap(quote, "Approve");
-    await tg.waitFor(/draft in Gmail/);
-    mark("quote approved");
-    // The quote waits as a draft reply in Hannah's email thread.
-    await web.glance(gmailDrafts, (g) => g.getByText(/Wholesale: 40 Autumn gift sets/).filter({ visible: true }).first(), 2500);
+    /* 09:02 · A new Shopify order */
+    mark("event order");
+    const orderName = await placeOrder(to.leah, "Leah", "Morgan", "WW-FIG", 2);
+    await web.glance(`${SHOPIFY_ADMIN}/orders`, (g) => g.getByText(orderName).filter({ visible: true }).first(), 2500);
+    mark("order placed");
+    const restock = await tg.waitFor(new RegExp(`New order ${orderName}`));
+    mark("order ready");
+    await approve(restock);
+    mark("order approved");
+    await showSent(sentLink(await delivered("inventory-guardian")));
 
-    /* 9 · A supplier invoice lands in Google Drive */
-    mark("scene 9 drive");
+    /* 09:40 · "Where's my order?" */
+    mark("event where");
+    await arrive(PEOPLE.sophie.name, to.sophie, "Where is my order?", readFileSync(`${FIX}/order-question.txt`, "utf8"));
+    await web.glance(gmailInbox, (g) => subjectIn(g, "Where is my order"), 2200);
+    mark("where email");
+    const where = await tg.waitFor(/emailed about an order/);
+    mark("where ready");
+    await approve(where);
+    mark("where approved");
+    await showSent(sentLink(await delivered("order-desk")));
+
+    /* 10:30 · A refund request, refunded in Stripe */
+    mark("event refund");
+    await arrive(PEOPLE.emma.name, to.emma, "My candle arrived cracked", readFileSync(`${FIX}/refund-request.txt`, "utf8"));
+    await web.glance(gmailInbox, (g) => subjectIn(g, "My candle arrived cracked"), 2200);
+    mark("refund email");
+    const refund = await tg.waitFor(/asked for a refund/);
+    mark("refund ready");
+    await approve(refund);
+    mark("refund approved");
+    const refundLinks = await delivered("order-desk");
+    const stripePayment = refundLinks.find((l) => l.url.includes("stripe.com"))?.url.split("/payments/")[1];
+    if (stripePayment) await web.glance(`${STRIPE_DASH}/payments/${stripePayment}`, (g) => g.getByText(/Refunded/).filter({ visible: true }).first(), 3000);
+    await showSent(sentLink(refundLinks), 3000);
+
+    /* 11:15 · A card is declined */
+    mark("event declined");
+    const pi = declineCard(PEOPLE.tom.name, to.tom, 4800, "Autumn gift set");
+    if (pi) await web.glance(`${STRIPE_DASH}/payments/${pi}`, (g) => g.getByText(/Failed|declined/i).filter({ visible: true }).first(), 2500);
+    mark("declined shown");
+    const rescue = await tg.waitFor(/card was declined/);
+    mark("declined ready");
+    await approve(rescue);
+    mark("declined approved");
+    await showSent(sentLink(await delivered("payment-rescue")));
+
+    /* 12:05 · A supplier invoice lands in Google Drive */
+    mark("event invoice");
     const folder = await driveListInvoices(UID);
-    // The supplier's invoice arrives in the folder, as if dropped there (Drive's multipart upload).
-    const token = await accessToken((await getConnection(UID, "google"))!);
+    const pdf = `${OUT}/invoice-NW-3317.pdf`;
+    writeFileSync(pdf, waxInvoicePdf(to.northernWax));
     const boundary = `ww${Date.now()}`;
     const upload = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
       method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": `multipart/related; boundary=${boundary}` },
+      headers: { authorization: `Bearer ${await google()}`, "content-type": `multipart/related; boundary=${boundary}` },
       body: Buffer.concat([
         Buffer.from(`--${boundary}\r\ncontent-type: application/json\r\n\r\n${JSON.stringify({ name: "invoice-NW-3317.pdf", parents: [folder!.folderId] })}\r\n--${boundary}\r\ncontent-type: application/pdf\r\n\r\n`),
-        readFileSync(`${FIX}/invoice-NW-3317.pdf`),
+        readFileSync(pdf),
         Buffer.from(`\r\n--${boundary}--`),
       ]),
     });
     if (!upload.ok) throw new Error(`Drive upload failed: ${upload.status}`);
-    mark("drive upload");
-    if (folder) await web.glance(`https://drive.google.com/drive/folders/${folder.folderId}`, (g) => g.getByText("invoice-NW-3317.pdf").filter({ visible: true }).first(), 2500);
+    await web.glance(`https://drive.google.com/drive/folders/${folder!.folderId}`, (g) => g.getByText("invoice-NW-3317.pdf").filter({ visible: true }).first(), 2500);
+    mark("invoice uploaded");
     // Drive is checked every 5 minutes; the edit skips ahead to the check.
     await queueDriveInvoices();
-    mark("drive checked");
     const over = await tg.waitFor("overcharged by");
-    mark("invoice draft");
-    await tg.me.pause(1500);
-    await tg.tap(over, "Approve");
-    await tg.waitFor(/drafted a correction email/);
+    mark("invoice ready");
+    await approve(over);
     mark("invoice approved");
     const sheet = (await getConnection(UID, "google"))?.meta?.spendSheetId as string | undefined;
     if (sheet) await web.glance(`https://docs.google.com/spreadsheets/d/${sheet}`, (g) => g.locator("#waffle-grid-container").first(), 2500);
 
-    /* 10 · Memory: a fact waits for Sam's OK, then Ada uses it */
-    mark("scene 10 memory");
-    await web.go("/memory");
-    const waiting = p.getByRole("region", { name: "Waiting for your OK" });
-    await web.show(waiting, 1500);
-    // Agents add their own facts here during the take, so pick the Northside one.
-    const northside = waiting.locator("li", { hasText: "Northside" }).first();
-    await web.show(northside, 1200);
-    await web.click(northside.getByRole("button", { name: "Remember it" }));
-    mark("fact approved");
-    await web.pause(1200);
-    await tg.ask("What do we know about how Northside Interiors pays?", /Northside/);
-    mark("memory answered");
+    /* 14:20 · A wholesale enquiry, priced with what the team remembers */
+    mark("event quote");
+    await arrive(`${PEOPLE.northside.name} · Northside Interiors`, to.northside, "Wholesale: 40 Autumn gift sets", readFileSync(`${FIX}/wholesale-enquiry.txt`, "utf8"));
+    await web.glance(gmailInbox, (g) => subjectIn(g, "Wholesale: 40 Autumn gift sets"), 2200);
+    mark("quote email");
+    const quote = await tg.waitFor(/emailed for a quote/);
+    mark("quote ready");
+    await approve(quote);
+    mark("quote approved");
+    await showSent(sentLink(await delivered("quote-builder")));
 
-    /* 11 · Team: invite Priya as a manager */
-    mark("scene 11 team");
-    await web.go("/team");
-    await p.locator("#invite-label").waitFor({ timeout: 30_000 });
-    await web.type(p.locator("#invite-label"), "Priya", 50);
-    await web.click(p.locator("#invite-role"));
-    await web.click(p.getByRole("option", { name: "Manager" }));
-    await web.click(p.getByRole("button", { name: "Create invite link" }));
-    await web.show(p.getByLabel("Invite link"), 2500);
-    mark("invite created");
-
-    /* 12 · Developers: a partner registers their agent live */
-    mark("scene 12 developers");
-    await web.go("/developers");
-    await p.locator("#cardUrl").waitFor({ timeout: 30_000 });
-    await web.paste(p.locator("#cardUrl"), `${LABELWISE_URL}/.well-known/agent-card.json`);
-    await web.paste(p.locator("#apiKey"), apiKey);
-    await web.click(p.getByRole("button", { name: "Check and publish" }));
-    await p.getByText(/is live in the marketplace/).first().waitFor({ timeout: 90_000 });
-    mark("partner listed");
-    await web.show(p.locator("main"), 3000);
-
-    /* 13 · What it all cost */
-    mark("scene 13 cost");
-    await tg.ask("What did all of this cost us?", /tokens/);
+    /* What it all cost (the one typed message: a question) */
+    mark("cost");
+    await tg.ask("What did today cost us?", /tokens/);
     mark("cost answered");
-    await tg.me.pause(2000);
+    await web.go("/memory");
+    await web.pause(2500);
+    mark("memory after");
   });
 }
 

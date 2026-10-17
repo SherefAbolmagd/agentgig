@@ -8,7 +8,10 @@
  * The profile holds a live Google session: keep it outside the repo and sign
  * out (or delete the folder) when the video is done.
  *
- *   npx tsx scripts/video-google-login.ts <profile-dir>
+ *   npx tsx scripts/video-google-login.ts <profile-dir> [more URLs to sign in to…]
+ *
+ * e.g. add https://admin.shopify.com https://dashboard.stripe.com for the
+ * store video, which shows the real Shopify order and Stripe payments.
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -19,8 +22,10 @@ function main() {
   const dir = process.argv[2];
   if (!dir) throw new Error("Pass the profile directory.");
   if (!EDGE) throw new Error("Microsoft Edge isn't installed.");
-  const edge = spawn(EDGE, [`--user-data-dir=${dir}`, "--no-first-run", "--no-default-browser-check", "https://accounts.google.com/ServiceLogin?continue=https://mail.google.com/mail/u/0/%23drafts"], { stdio: "ignore" });
-  console.log("Sign in to the Google account connected to the video account, then close the Edge window.");
+  const extra = process.argv.slice(3).filter((u) => /^https:\/\//.test(u));
+  const pages = extra.length ? extra : ["https://accounts.google.com/ServiceLogin?continue=https://mail.google.com/mail/u/0/%23drafts"];
+  const edge = spawn(EDGE, [`--user-data-dir=${dir}`, "--no-first-run", "--no-default-browser-check", ...pages], { stdio: "ignore" });
+  console.log(extra.length ? "Sign in on each tab, then close the Edge window." : "Sign in to the Google account connected to the video account, then close the Edge window.");
   edge.on("exit", () => console.log("✓ Edge closed. The profile keeps the sign-in."));
 }
 
