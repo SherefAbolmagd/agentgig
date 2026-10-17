@@ -79,23 +79,43 @@ const w = (from: number, to: number) => p(from, to, 1, true);
 // The story: every agent starts on an event; marks come from scripts/video-record.ts.
 const has = (label: string) => marks.some((m) => m.label === label);
 
-/** One event: what happened, the wait while the agent works (sped up), then Sam's phone and the result. */
-const event = (start: string, shown: string, ready: string, next: string): Piece[] => [p(at(start), at(shown)), w(at(shown), at(ready) - 0.8), p(at(ready) - 0.8, at(next))];
+/**
+ * One event, from the recorder's marks: the source app (its page load sped up), the wait while
+ * the agent works (sped up), Sam reading and tapping on the phone, the delivery (sped up), Ada's
+ * confirmation, then each result page (loads sped up) and the trip back (sped up).
+ */
+const event = (n: string, results: string[], next: string): Piece[] => {
+  const ps = [
+    w(at(`event ${n}`), at(`${n} source`) - 0.3),
+    p(at(`${n} source`) - 0.3, at(`${n} source done`)),
+    w(at(`${n} source done`), at(`${n} ready`) - 0.8),
+    p(at(`${n} ready`) - 0.8, at(`${n} tapped`) + 0.6),
+    w(at(`${n} tapped`) + 0.6, at(`${n} approved`) - 0.2),
+    p(at(`${n} approved`) - 0.2, at(`${n} approved`) + 1.2),
+  ];
+  let from = at(`${n} approved`) + 1.2;
+  for (const r of results.filter(has)) {
+    ps.push(w(from, at(r) - 0.3), p(at(r) - 0.3, at(`${r} done`)));
+    from = at(`${r} done`);
+  }
+  ps.push(w(from, at(next)));
+  return ps.filter((x) => x.to > x.from);
+};
 
 // The hook: a Shopify order comes in and Sam's phone lights up, nobody asked.
-const hook: Piece[] = [p(at("event order"), at("order placed")), w(at("order placed"), at("order ready") - 0.8), p(at("order ready") - 0.8, at("order ready") + 2.6)];
+const hook: Piece[] = [p(at("order source") - 0.3, at("order source done")), w(at("order source done"), at("order ready") - 0.8), p(at("order ready") - 0.8, at("order ready") + 2.6)];
 
 const scenes: { key: string; pieces: Piece[]; chip?: [string, string, string] }[] = [
   { key: "03", pieces: [p(at("tour team"), at("tour telegram"))] },
   { key: "04", pieces: [p(at("tour telegram"), at("event order"))] },
-  { key: "05", pieces: event("event order", "order placed", "order ready", "event where"), chip: ["09:02", "Shopify", "New order"] },
-  { key: "06", pieces: event("event where", "where email", "where ready", "event refund"), chip: ["09:40", "Gmail", "Customer email"] },
-  { key: "07", pieces: event("event refund", "refund email", "refund ready", "event declined"), chip: ["10:30", "Gmail", "Refund request"] },
-  { key: "08", pieces: event("event declined", "declined shown", "declined ready", "event invoice"), chip: ["11:15", "Stripe", "Card declined"] },
-  // The 5-minute Drive check is skipped: the glance at the folder runs into the check.
-  { key: "09", pieces: event("event invoice", "invoice uploaded", "invoice ready", "event quote"), chip: ["12:05", "Google Drive", "Supplier invoice"] },
-  { key: "10", pieces: event("event quote", "quote email", "quote ready", "cost"), chip: ["14:20", "Gmail", "Wholesale enquiry"] },
-  { key: "11", pieces: [p(at("cost"), at("cost") + 3), w(at("cost") + 3, at("cost answered") - 0.8), p(at("cost answered") - 0.8, at("end"))] },
+  { key: "05", pieces: event("order", ["order result"], "event where"), chip: ["09:02", "Shopify", "New order"] },
+  { key: "06", pieces: event("where", ["where result"], "event refund"), chip: ["09:40", "Gmail", "Customer email"] },
+  { key: "07", pieces: event("refund", ["refund stripe", "refund result"], "event declined"), chip: ["10:30", "Gmail", "Refund request"] },
+  { key: "08", pieces: event("declined", ["declined result"], "event invoice"), chip: ["11:15", "Stripe", "Card declined"] },
+  // The 5-minute Drive check is skipped: the wait after the folder glance runs into the check.
+  { key: "09", pieces: event("invoice", ["invoice result"], "event quote"), chip: ["12:05", "Google Drive", "Supplier invoice"] },
+  { key: "10", pieces: event("quote", ["quote result"], "cost"), chip: ["14:20", "Gmail", "Wholesale enquiry"] },
+  { key: "11", pieces: [p(at("cost"), at("cost") + 3), w(at("cost") + 3, at("cost answered") - 0.8), p(at("cost answered") - 0.8, Math.min(at("end"), at("cost answered") + 4))] },
 ];
 
 const piecesLen = (ps: Piece[], waitSpeed: number) => ps.reduce((n, x) => n + (x.to - x.from) / (x.wait ? waitSpeed : x.speed), 0);
@@ -192,16 +212,16 @@ const callouts = [
   ...callout(toOut(at("tour marketplace")), "Hire more from the marketplace", "Paid per finished task"),
   ...callout(sceneStart("04") + 1.0, "Link Telegram once", "Ada brings every draft to Sam's phone"),
   ...callout(toOut(at("order ready")), "Fig & Cedar down to 2", "Reorder to Calder Candle Co. written"),
-  ...callout(toOut(at("order approved")), "Sent from Sam's Gmail", "Only after Sam's tap"),
-  ...callout(toOut(at("where email")), "A customer emails", "Nobody forwards it"),
+  ...callout(toOut(at("order result")), "Sent from Sam's Gmail", "Only after Sam's tap"),
+  ...callout(toOut(at("where source")), "A customer emails", "Nobody forwards it"),
   ...callout(toOut(at("where ready")), "Found in Shopify", "Tracking included"),
   ...callout(toOut(at("refund ready")), "Refund £24.00?", "Only the cracked candle, never more than was paid"),
-  ...callout(toOut(at("refund approved")), "Refunded in Stripe", "Apology sent in the same thread"),
-  ...callout(toOut(at("declined shown")), "Card declined in Stripe", "Stripe tells AgentGig straight away"),
+  ...callout(toOut(at("refund stripe")), "Refunded in Stripe", "Apology sent in the same thread"),
+  ...callout(toOut(at("declined source")), "Card declined in Stripe", "Stripe tells AgentGig straight away"),
   ...callout(toOut(at("declined ready")), "A kind note, a new payment link", "The sale isn't lost"),
-  ...callout(toOut(at("invoice uploaded")), "Lands in Google Drive", "The folder is checked every 5 minutes"),
+  ...callout(toOut(at("invoice source")), "Lands in Google Drive", "The folder is checked every 5 minutes"),
   ...callout(toOut(at("invoice ready")), "£22.00 overcharge caught", "Gemini reads it · code checks the sums"),
-  ...callout(toOut(at("quote email")), "A wholesale enquiry", "Quote Builder picks it up from the inbox"),
+  ...callout(toOut(at("quote source")), "A wholesale enquiry", "Quote Builder picks it up from the inbox"),
   ...callout(toOut(at("quote ready")), "Priced from Sam's own list", "And it remembers Northside pays late"),
   ...callout(toOut(at("cost answered")), "Charged only for finished work", "Failed tasks are free"),
 ];

@@ -268,13 +268,19 @@ export class Person {
   /**
    * A short look at the real result somewhere else (a Gmail draft, the Drive
    * folder, the spend sheet), then back to where we were. `ready` is what must
-   * be on screen before the camera holds on it.
+   * be on screen before the camera holds on it. With `label`, the moment it
+   * is (`label`) and the moment the hold ends (`label` + " done") are marked,
+   * so the edit can fast-forward the page loads on either side.
    */
-  async glance(url: string, ready: (p: Page) => Locator, hold = 3000) {
+  async glance(url: string, ready: (p: Page) => Locator, hold = 3000, label?: string) {
     const back = this.page.url();
     await this.page.goto(url);
     await this.redraw();
-    await this.show(ready(this.page), hold);
+    const target = ready(this.page);
+    await target.waitFor({ state: "visible", timeout: 60_000 });
+    if (label) this.take.mark(label);
+    await this.show(target, hold);
+    if (label) this.take.mark(`${label} done`);
     await this.page.goto(back);
     await this.redraw();
   }

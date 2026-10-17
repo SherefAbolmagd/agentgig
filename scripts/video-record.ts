@@ -145,14 +145,16 @@ async function main() {
   const gmailInbox = "https://mail.google.com/mail/u/0/#inbox";
   const subjectIn = (g: Page, subject: string) => g.getByText(subject).filter({ visible: true }).first();
   /** Shows a sent email in Gmail: the thread, with the customer's email and the reply. */
-  const showSent = async (url: string | undefined, hold = 3500) => {
-    if (url) await web.glance(url, (g) => g.locator("div[role=main] h2").filter({ visible: true }).first(), hold);
+  const showSent = async (url: string | undefined, label: string, hold = 4000) => {
+    if (url) await web.glance(url, (g) => g.locator("div[role=main] h2").filter({ visible: true }).first(), hold, label);
   };
-  const approve = async (bubble: Awaited<ReturnType<typeof tg.waitFor>>) => {
+  /** Sam reads the draft on the phone and taps Approve ("<event> tapped"); then the delivery runs. */
+  const approve = async (bubble: Awaited<ReturnType<typeof tg.waitFor>>, event: string) => {
     const before = await tg.incoming(DONE).count();
     await tg.me.point(bubble);
     await tg.me.pause(1800);
     await tg.tap(bubble, "Approve");
+    mark(`${event} tapped`);
     await tg.waitFor(DONE, before);
   };
 
@@ -181,49 +183,49 @@ async function main() {
     /* 09:02 · A new Shopify order */
     mark("event order");
     const orderName = await placeOrder(to.leah, "Leah", "Morgan", "WW-FIG", 2);
-    await web.glance(`${SHOPIFY_ADMIN}/orders`, (g) => g.getByText(orderName).filter({ visible: true }).first(), 2500);
+    await web.glance(`${SHOPIFY_ADMIN}/orders`, (g) => g.getByText(orderName).filter({ visible: true }).first(), 2500, "order source");
     mark("order placed");
     const restock = await tg.waitFor(new RegExp(`New order ${orderName}`));
     mark("order ready");
-    await approve(restock);
+    await approve(restock, "order");
     mark("order approved");
-    await showSent(sentLink(await delivered("inventory-guardian")));
+    await showSent(sentLink(await delivered("inventory-guardian")), "order result");
 
     /* 09:40 · "Where's my order?" */
     mark("event where");
     await arrive(PEOPLE.sophie.name, to.sophie, "Where is my order?", readFileSync(`${FIX}/order-question.txt`, "utf8"));
-    await web.glance(gmailInbox, (g) => subjectIn(g, "Where is my order"), 2200);
+    await web.glance(gmailInbox, (g) => subjectIn(g, "Where is my order"), 2200, "where source");
     mark("where email");
     const where = await tg.waitFor(/emailed about an order/);
     mark("where ready");
-    await approve(where);
+    await approve(where, "where");
     mark("where approved");
-    await showSent(sentLink(await delivered("order-desk")));
+    await showSent(sentLink(await delivered("order-desk")), "where result");
 
     /* 10:30 · A refund request, refunded in Stripe */
     mark("event refund");
     await arrive(PEOPLE.emma.name, to.emma, "My candle arrived cracked", readFileSync(`${FIX}/refund-request.txt`, "utf8"));
-    await web.glance(gmailInbox, (g) => subjectIn(g, "My candle arrived cracked"), 2200);
+    await web.glance(gmailInbox, (g) => subjectIn(g, "My candle arrived cracked"), 2200, "refund source");
     mark("refund email");
     const refund = await tg.waitFor(/asked for a refund/);
     mark("refund ready");
-    await approve(refund);
+    await approve(refund, "refund");
     mark("refund approved");
     const refundLinks = await delivered("order-desk");
     const stripePayment = refundLinks.find((l) => l.url.includes("stripe.com"))?.url.split("/payments/")[1];
-    if (stripePayment) await web.glance(`${STRIPE_DASH}/payments/${stripePayment}`, (g) => g.getByText(/Refunded/).filter({ visible: true }).first(), 3000);
-    await showSent(sentLink(refundLinks), 3000);
+    if (stripePayment) await web.glance(`${STRIPE_DASH}/payments/${stripePayment}`, (g) => g.getByText(/Refunded/).filter({ visible: true }).first(), 3000, "refund stripe");
+    await showSent(sentLink(refundLinks), "refund result", 3000);
 
     /* 11:15 · A card is declined */
     mark("event declined");
     const pi = declineCard(PEOPLE.tom.name, to.tom, 4800, "Autumn gift set");
-    if (pi) await web.glance(`${STRIPE_DASH}/payments/${pi}`, (g) => g.getByText(/Failed|declined/i).filter({ visible: true }).first(), 2500);
+    if (pi) await web.glance(`${STRIPE_DASH}/payments/${pi}`, (g) => g.getByText(/Failed|declined/i).filter({ visible: true }).first(), 2500, "declined source");
     mark("declined shown");
     const rescue = await tg.waitFor(/card was declined/);
     mark("declined ready");
-    await approve(rescue);
+    await approve(rescue, "declined");
     mark("declined approved");
-    await showSent(sentLink(await delivered("payment-rescue")));
+    await showSent(sentLink(await delivered("payment-rescue")), "declined result");
 
     /* 12:05 · A supplier invoice lands in Google Drive */
     mark("event invoice");
@@ -241,27 +243,27 @@ async function main() {
       ]),
     });
     if (!upload.ok) throw new Error(`Drive upload failed: ${upload.status}`);
-    await web.glance(`https://drive.google.com/drive/folders/${folder!.folderId}`, (g) => g.getByText("invoice-NW-3317.pdf").filter({ visible: true }).first(), 2500);
+    await web.glance(`https://drive.google.com/drive/folders/${folder!.folderId}`, (g) => g.getByText("invoice-NW-3317.pdf").filter({ visible: true }).first(), 2500, "invoice source");
     mark("invoice uploaded");
     // Drive is checked every 5 minutes; the edit skips ahead to the check.
     await queueDriveInvoices();
     const over = await tg.waitFor("overcharged by");
     mark("invoice ready");
-    await approve(over);
+    await approve(over, "invoice");
     mark("invoice approved");
     const sheet = (await getConnection(UID, "google"))?.meta?.spendSheetId as string | undefined;
-    if (sheet) await web.glance(`https://docs.google.com/spreadsheets/d/${sheet}`, (g) => g.locator("#waffle-grid-container").first(), 2500);
+    if (sheet) await web.glance(`https://docs.google.com/spreadsheets/d/${sheet}`, (g) => g.locator("#waffle-grid-container").first(), 2500, "invoice result");
 
     /* 14:20 · A wholesale enquiry, priced with what the team remembers */
     mark("event quote");
     await arrive(`${PEOPLE.northside.name} · Northside Interiors`, to.northside, "Wholesale: 40 Autumn gift sets", readFileSync(`${FIX}/wholesale-enquiry.txt`, "utf8"));
-    await web.glance(gmailInbox, (g) => subjectIn(g, "Wholesale: 40 Autumn gift sets"), 2200);
+    await web.glance(gmailInbox, (g) => subjectIn(g, "Wholesale: 40 Autumn gift sets"), 2200, "quote source");
     mark("quote email");
     const quote = await tg.waitFor(/emailed for a quote/);
     mark("quote ready");
-    await approve(quote);
+    await approve(quote, "quote");
     mark("quote approved");
-    await showSent(sentLink(await delivered("quote-builder")));
+    await showSent(sentLink(await delivered("quote-builder")), "quote result");
 
     /* What it all cost (the one typed message: a question) */
     mark("cost");
