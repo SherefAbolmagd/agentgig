@@ -159,24 +159,33 @@ async function main() {
   };
 
   await stage.run(async () => {
-    /* Tour: the team, their triggers and the shared memory */
-    mark("tour team");
+    /* Tour: the team, their triggers and the shared memory. Each page is marked once its
+       content is in ("… go" marks the click), so the edit can skip the loading. */
+    mark("tour team go");
     await web.go("/workforce");
+    await p.getByText("Payment Rescue").first().waitFor({ timeout: 30_000 });
+    mark("tour team");
     await web.pause(1500);
     await web.scroll(380);
     await web.pause(1800);
     await web.scroll(-380);
-    mark("tour memory");
+    mark("tour memory go");
     await web.go("/memory");
-    await web.pause(2500);
-    mark("tour marketplace");
+    await p.getByText(/Calder Candle Co\. pours our candles/).first().waitFor({ timeout: 30_000 });
+    mark("tour memory");
+    await web.pause(2800);
+    mark("tour marketplace go");
     await web.click(p.getByRole("link", { name: "Marketplace" }));
     await web.redraw();
+    await p.locator("article", { hasText: "Payment Rescue" }).first().waitFor({ timeout: 30_000 });
+    mark("tour marketplace");
     await web.show(p.locator("article", { hasText: "Payment Rescue" }).first(), 2200);
 
     /* Telegram: linked once, then the team comes to Sam */
-    mark("tour telegram");
+    mark("tour telegram go");
     await web.go("/team");
+    await p.getByText(/Telegram/).first().waitFor({ timeout: 30_000 });
+    mark("tour telegram");
     await web.show(p.getByText(/Telegram/).first(), 2500);
     await web.go("/workforce");
 

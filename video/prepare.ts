@@ -106,8 +106,14 @@ const event = (n: string, results: string[], next: string): Piece[] => {
 const hook: Piece[] = [p(at("order source") - 0.3, at("order source done")), w(at("order source done"), at("order ready") - 0.8), p(at("order ready") - 0.8, at("order ready") + 2.6)];
 
 const scenes: { key: string; pieces: Piece[]; chip?: [string, string, string] }[] = [
-  { key: "03", pieces: [p(at("tour team"), at("tour telegram"))] },
-  { key: "04", pieces: [p(at("tour telegram"), at("event order"))] },
+  // Page loads in the tour are skipped: each page appears once its content is in.
+  {
+    key: "03",
+    pieces: has("tour memory go")
+      ? [p(at("tour team"), at("tour memory go")), w(at("tour memory go"), at("tour memory")), p(at("tour memory"), at("tour marketplace go")), w(at("tour marketplace go"), at("tour marketplace")), p(at("tour marketplace"), at("tour telegram go"))]
+      : [p(at("tour team"), at("tour telegram"))],
+  },
+  { key: "04", pieces: has("tour telegram go") ? [w(at("tour telegram go"), at("tour telegram")), p(at("tour telegram"), at("event order"))] : [p(at("tour telegram"), at("event order"))] },
   { key: "05", pieces: event("order", ["order result"], "event where"), chip: ["09:02", "Shopify", "New order"] },
   { key: "06", pieces: event("where", ["where result"], "event refund"), chip: ["09:40", "Gmail", "Customer email"] },
   { key: "07", pieces: event("refund", ["refund stripe", "refund result"], "event declined"), chip: ["10:30", "Gmail", "Refund request"] },
