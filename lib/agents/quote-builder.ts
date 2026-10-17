@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { deliverEmail, emailSummary, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
 import { EmailSource, reSubject } from "./drafts";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
@@ -152,7 +152,7 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
         .join("\n"),
       severity: o.estimatedLines ? "check" : "info",
       actions: [
-        { id: "approve", label: "Save as email draft", kind: "approve" },
+        { id: "approve", label: "Approve quote email", kind: "approve" },
         { id: "edit", label: "Edit intro first", kind: "edit" },
         { id: "skip", label: "Not now", kind: "skip" },
       ],
@@ -162,13 +162,13 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
   async deliver(o, { userId }): Promise<Delivery> {
     const { db } = await import("@/lib/firebase-admin");
     const user = (await db().collection("users").doc(userId).get()).data() as { businessName?: string } | undefined;
-    const draft = await createEmailDraft(userId, {
+    const mail = await deliverEmail(userId, {
       to: o.customerEmail,
       subject: o.email ? reSubject(o.email.subject) : `Your quote ${o.reference}`,
       body: quoteText(o, user?.businessName ?? ""),
       replyTo: o.email,
     });
-    if (!draft) return notDelivered("Quote ready. Connect Google or Microsoft 365 to save it as an email draft, or copy it from the result.");
-    return { delivered: true, summary: `Quote saved as a draft in ${draft.app}. Nothing was sent.`, links: [{ label: "Open draft", url: draft.url }] };
+    if (!mail) return notDelivered("Quote ready. Connect Google or Microsoft 365 to save it as an email draft, or copy it from the result.");
+    return { delivered: true, summary: emailSummary([mail], `quote ${o.reference}`), links: [{ label: mail.sent ? "Open sent email" : "Open draft", url: mail.url }] };
   },
 });

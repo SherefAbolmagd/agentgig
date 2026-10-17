@@ -23,7 +23,7 @@ export async function getConnection(userId: string, provider: Provider): Promise
 }
 
 export { gmailCreateDraft, sheetsAppendRow, linkedinPost, slackPost };
-export { createEmailDraft, selfAddress, EMAIL_TOOLS } from "./mail";
+export { createEmailDraft, deliverEmail, emailSummary, selfAddress, EMAIL_TOOLS, type EmailOutcome } from "./mail";
 
 /** Shape every agent's deliver() returns. */
 export interface Delivery extends Record<string, unknown> {

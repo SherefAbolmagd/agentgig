@@ -1,13 +1,16 @@
 import { z } from "zod";
 import { GatewayError } from "@/lib/errors";
-import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { deliverEmail, emailSummary, notDelivered, type Delivery, type EmailOutcome } from "@/lib/connectors";
+import { shopifyOrder, type ShopifyNewOrder } from "@/lib/connectors/shopify";
 import { storeProducts } from "@/lib/connectors/store";
 import { generateJson, textPart } from "@/lib/vertex";
-import { defineAgent, groundingPrompt } from "./types";
+import { defineAgent, groundingPrompt, type Grounding } from "./types";
 
 /**
- * Inventory Guardian: reads a stock export (CSV), works out days of cover and
- * reorder quantities in code, and asks Gemini only to write the supplier emails.
+ * Inventory Guardian: reads stock (Shopify, WooCommerce or a CSV export),
+ * works out days of cover and reorder quantities in code, and asks Gemini only
+ * to write the supplier emails. Started by a new Shopify order, it tells the
+ * owner what to pack and reorders only what that order ran low.
  */
 
 export const InventoryInput = z.object({
@@ -15,6 +18,8 @@ export const InventoryInput = z.object({
   stockCsv: z.string().trim().min(10).max(200_000).optional(),
   leadTimeDays: z.number().int().min(0).max(60).default(3),
   coverDays: z.number().int().min(1).max(90).default(14),
+  /** Set by the Shopify "new order" trigger (gid://shopify/Order/…). */
+  orderId: z.string().regex(/^gid:\/\/shopify\/Order\/\d+$/).optional(),
 });
 export type InventoryInput = z.infer<typeof InventoryInput>;
 
@@ -110,6 +115,19 @@ export function analyseStock(lines: StockLine[], leadTimeDays: number, coverDays
   });
 }
 
+/** A supplier's email from company memory or the profile: an address in the same fact as the supplier's name. */
+export function supplierEmail(g: Grounding, supplier: string): string | null {
+  const key = supplier.toLowerCase().split(/\s+/)[0];
+  if (!key || key === "unknown") return null;
+  const texts = [...g.memory.map((m) => m.fact), ...(g.profile?.description.split(/(?<=[.!?])\s+/) ?? [])];
+  for (const t of texts) {
+    if (!t.toLowerCase().includes(key)) continue;
+    const email = t.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/)?.[0];
+    if (email) return email;
+  }
+  return null;
+}
+
 const EmailSchema = z.object({
   emails: z.array(z.object({ supplier: z.string(), subject: z.string(), body: z.string() })),
   summary: z.string().describe("One or two sentences for the owner: what's running low and when"),
@@ -122,6 +140,8 @@ export type InventoryOutput = {
   emails: { supplier: string; to: string | null; subject: string; body: string }[];
   summary: string;
   source: string;
+  /** The new order that started this check, when a Shopify order did. */
+  order?: Pick<ShopifyNewOrder, "number" | "customerName" | "total" | "currency"> & { items: string[] };
 };
 
 export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
@@ -144,13 +164,22 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
       source = store.source === "shopify" ? "Shopify" : "WooCommerce";
     }
     const products = analyseStock(lines, input.leadTimeDays, input.coverDays);
-    const reorders = products.filter((p) => p.reorderQty > 0);
+    let reorders = products.filter((p) => p.reorderQty > 0);
+    let order: InventoryOutput["order"];
+    if (input.orderId) {
+      const o = await shopifyOrder(userId, input.orderId);
+      if (!o) throw new GatewayError("INVALID_INPUT", "That order isn't in your Shopify store.");
+      order = { number: o.number, customerName: o.customerName, total: o.total, currency: o.currency, items: o.lines.map((l) => `${l.quantity} × ${l.name}`) };
+      // Only what this order ran low; the morning check covers the rest.
+      const inOrder = new Set(o.lines.flatMap((l) => [l.sku, l.name]));
+      reorders = reorders.filter((r) => inOrder.has(r.sku) || inOrder.has(r.name));
+    }
     const costs = reorders.map((r) => r.reorderCost);
     const totalCost = costs.every((c) => c !== null) ? Math.round(costs.reduce((s, c) => s + (c ?? 0), 0) * 100) / 100 : null;
 
     if (!reorders.length) {
       return {
-        output: { products, reorders, totalCost: 0, emails: [], summary: "Everything has enough stock for now. Nothing to reorder.", source },
+        output: { products, reorders, totalCost: 0, emails: [], summary: order ? "Everything in it has enough stock." : "Everything has enough stock for now. Nothing to reorder.", source, ...(order && { order }) },
         model: "rules",
         latencyMs: 0,
         usage: { inputTokens: 0, outputTokens: 0 },
@@ -169,11 +198,26 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
       temperature: 0.3,
       thinkingBudget: 0,
     });
-    const emails = res.data.emails.map((e) => ({ ...e, to: bySupplier[e.supplier]?.[0]?.supplierEmail ?? null }));
-    return { ...res, output: { products, reorders, totalCost, emails, summary: res.data.summary, source }, notes: [`Read ${products.length} products from ${source}`] };
+    const emails = res.data.emails.map((e) => ({ ...e, to: bySupplier[e.supplier]?.[0]?.supplierEmail ?? supplierEmail(grounding, e.supplier) }));
+    return { ...res, output: { products, reorders, totalCost, emails, summary: res.data.summary, source, ...(order && { order }) }, notes: [`Read ${products.length} products from ${source}`] };
   },
 
   approval(o) {
+    if (o.order) {
+      const pack = `${o.order.number}${o.order.customerName ? ` from ${o.order.customerName}` : ""}: ${o.order.items.join(", ")}`;
+      if (!o.reorders.length) return { title: `New order ${o.order.number} to pack`, preview: `${pack}. ${o.summary}`, severity: "info", actions: [{ id: "approve", label: "OK", kind: "approve" }] };
+      const low = o.reorders.map((r) => `${r.name} is down to ${r.onHand}`).join(", ");
+      return {
+        title: `New order ${o.order.number} to pack. ${low}`,
+        preview: `${pack}.
+${o.summary} Reorder drafted to ${[...new Set(o.reorders.map((r) => r.supplier))].join(", ")}.`,
+        severity: "check",
+        actions: [
+          { id: "approve", label: "Approve reorder email", kind: "approve" },
+          { id: "skip", label: "Not now", kind: "skip" },
+        ],
+      };
+    }
     if (!o.reorders.length) return { title: "Stock check: nothing to reorder", preview: o.summary, severity: "info", actions: [{ id: "approve", label: "OK", kind: "approve" }] };
     const suppliers = new Set(o.reorders.map((r) => r.supplier)).size;
     return {
@@ -190,11 +234,13 @@ export const inventoryGuardian = defineAgent<InventoryInput, InventoryOutput>({
   async deliver(o, { userId }): Promise<Delivery> {
     if (!o.emails.length) return { delivered: true, summary: "Nothing to order" };
     const links: { label: string; url: string }[] = [];
+    const results: EmailOutcome[] = [];
     for (const e of o.emails) {
-      const draft = await createEmailDraft(userId, { to: e.to, subject: e.subject, body: e.body });
-      if (!draft) return notDelivered(`${o.emails.length} order email(s) ready. Connect Google or Microsoft 365 to save them as email drafts.`);
-      links.push({ label: `${draft.app} draft · ${e.supplier}`, url: draft.url });
+      const mail = await deliverEmail(userId, { to: e.to, subject: e.subject, body: e.body });
+      if (!mail) return notDelivered(`${o.emails.length} order email(s) ready. Connect Google or Microsoft 365 to save them as email drafts.`);
+      results.push(mail);
+      links.push({ label: `${mail.sent ? "Sent" : "Draft"} · ${e.supplier}`, url: mail.url });
     }
-    return { delivered: true, summary: `${links.length} order email draft(s) saved`, links };
+    return { delivered: true, summary: emailSummary(results, results.length > 1 ? `${results.length} supplier orders` : "supplier order"), links };
   },
 });

@@ -28,25 +28,56 @@ export interface GmailReplyTo {
   messageId: string;
 }
 
-/** Creates a Gmail draft (never sends), threaded under the email it answers when given. Null if Google isn't connected. */
-export async function gmailCreateDraft(userId: string, mail: { to?: string | null; subject: string; body: string; replyTo?: GmailReplyTo | null }) {
-  const g = await google(userId);
-  if (!g) return null;
+export interface GmailOutgoing {
+  to?: string | null;
+  subject: string;
+  body: string;
+  replyTo?: GmailReplyTo | null;
+  /** Display name on the From line (the connected address stays the sender). */
+  fromName?: string | null;
+}
+
+const encodeWord = (s: string) => `=?UTF-8?B?${Buffer.from(s).toString("base64")}?=`;
+
+function rawMessage(mail: GmailOutgoing, fromAddress: string | null) {
   const r = mail.replyTo;
   const headers = [
+    mail.fromName && fromAddress ? `From: ${encodeWord(mail.fromName)} <${fromAddress}>` : null,
     mail.to ? `To: ${mail.to}` : null,
     r ? `In-Reply-To: ${r.messageId}` : null,
     r ? `References: ${r.messageId}` : null,
-    `Subject: =?UTF-8?B?${Buffer.from(mail.subject).toString("base64")}?=`, "MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64",
+    `Subject: ${encodeWord(mail.subject)}`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: base64",
   ]
     .filter(Boolean)
     .join("\r\n");
-  const raw = Buffer.from(`${headers}\r\n\r\n${Buffer.from(mail.body).toString("base64")}`).toString("base64url");
+  return Buffer.from(`${headers}\r\n\r\n${Buffer.from(mail.body).toString("base64")}`).toString("base64url");
+}
+
+/** Creates a Gmail draft (never sends), threaded under the email it answers when given. Null if Google isn't connected. */
+export async function gmailCreateDraft(userId: string, mail: GmailOutgoing) {
+  const g = await google(userId);
+  if (!g) return null;
+  const raw = rawMessage(mail, mail.fromName ? await googleSelf(userId) : null);
   const draft = await call<{ id: string; message: { id: string } }>(g.token, "https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
     method: "POST",
-    body: JSON.stringify({ message: { raw, ...(r && { threadId: r.threadId }) } }),
+    body: JSON.stringify({ message: { raw, ...(mail.replyTo && { threadId: mail.replyTo.threadId }) } }),
   });
   return { draftId: draft.id, url: `https://mail.google.com/mail/u/0/#drafts?compose=${draft.message.id}` };
+}
+
+/** Sends an email from the connected Gmail, in the thread it answers when given. Only after the owner approved it. */
+export async function gmailSend(userId: string, mail: GmailOutgoing & { to: string }) {
+  const g = await google(userId);
+  if (!g) return null;
+  const raw = rawMessage(mail, mail.fromName ? await googleSelf(userId) : null);
+  const sent = await call<{ id: string; threadId: string }>(g.token, "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    body: JSON.stringify({ raw, ...(mail.replyTo && { threadId: mail.replyTo.threadId }) }),
+  });
+  return { messageId: sent.id, url: `https://mail.google.com/mail/u/0/#sent/${sent.id}` };
 }
 
 /* ---------- Gmail inbox ---------- */

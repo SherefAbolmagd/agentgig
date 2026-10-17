@@ -62,10 +62,10 @@ export async function hireAgent(userId: string, req: HireRequest): Promise<HireD
     tx.set(hireRef, hire, { merge: true });
     return hire as unknown as HireDoc;
   });
-  // Agents that work on new emails need Gmail's push switched on for this inbox.
-  if (trigger.type === "event" && trigger.event === "gmail.message") {
-    const { ensureGmailWatch } = await import("./email-trigger");
-    await ensureGmailWatch(userId).catch((err) => console.error("gmail watch failed", err));
+  // Agents that start on events (an email, a Shopify order, a failed payment) need that source switched on.
+  if (trigger.type === "event") {
+    const { ensureEventSources } = await import("./event-sources");
+    await ensureEventSources(userId);
   }
   return hired;
 }

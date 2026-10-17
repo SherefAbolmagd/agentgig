@@ -44,6 +44,9 @@ export async function saveKeyConnection(userId: string, provider: KeyProvider, f
       meta: check.meta,
       createdAt: FieldValue.serverTimestamp(),
     });
+  // Shopify and Stripe connections can switch on the webhooks event-triggered agents wait for.
+  const { ensureEventSources } = await import("@/lib/event-sources");
+  await ensureEventSources(userId);
   return check;
 }
 

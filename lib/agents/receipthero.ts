@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase-admin";
 import { GatewayError } from "@/lib/errors";
 import { filePart, generateJson, textPart } from "@/lib/vertex";
 import { COLLECTIONS } from "@/types/firestore";
-import { gmailCreateDraft, sheetsAppendRow, notDelivered, type Delivery } from "@/lib/connectors";
+import { deliverEmail, emailSummary, sheetsAppendRow, notDelivered, type Delivery } from "@/lib/connectors";
 import { defineAgent, groundingPrompt } from "./types";
 
 export const ReceiptHeroInput = z.object({
@@ -169,7 +169,7 @@ export const receiptHero = defineAgent<ReceiptHeroInput, ReceiptHeroOutput>({
     const links = [{ label: "Spend log", url: sheet.url }];
     const problem = o.flags.find((f) => f.severity === "high");
     if (problem) {
-      const draft = await gmailCreateDraft(userId, {
+      const mail = await deliverEmail(userId, {
         to: o.vendor.email,
         subject: `Invoice ${o.invoiceNumber ?? ""} needs correcting`.replace("  ", " "),
         body: `Hello ${o.vendor.name},
@@ -180,9 +180,10 @@ Could you send a corrected invoice? We'll pay as soon as it arrives.
 
 Thank you`,
       });
-      if (draft) links.push({ label: "Correction email draft", url: draft.url });
+      if (mail) links.push({ label: mail.sent ? "Correction email (sent)" : "Correction email draft", url: mail.url });
+      return { delivered: true, summary: `Logged to your spend sheet. ${mail ? emailSummary([mail], "correction email") : "Connect Google to email the supplier."}`, links };
     }
-    return { delivered: true, summary: problem ? "Logged to your spend sheet and drafted a correction email" : "Logged to your spend sheet", links };
+    return { delivered: true, summary: "Logged to your spend sheet", links };
   },
 });
 

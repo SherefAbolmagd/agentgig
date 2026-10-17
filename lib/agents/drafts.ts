@@ -1,4 +1,4 @@
-import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
+import { deliverEmail, emailSummary, notDelivered, type Delivery, type EmailOutcome } from "@/lib/connectors";
 import { createTasks, type NewTask } from "@/lib/connectors/tasks";
 import { z } from "zod";
 
@@ -21,18 +21,21 @@ export interface DraftEmail {
   label: string;
 }
 
-/** Saves emails as Gmail or Outlook drafts (never sends). Not delivered if neither is connected. */
+/**
+ * Delivers approved emails: sent, or saved as Gmail or Outlook drafts,
+ * depending on the account's setting. Not delivered if no email is connected.
+ */
 export async function deliverDrafts(userId: string, emails: DraftEmail[], what: string): Promise<Delivery> {
   if (!emails.length) return { delivered: true, summary: `No ${what} needed` };
   const links: { label: string; url: string }[] = [];
-  let app = "email";
+  const results: EmailOutcome[] = [];
   for (const e of emails) {
-    const draft = await createEmailDraft(userId, { to: e.to, subject: e.subject, body: e.body });
-    if (!draft) return notDelivered(`${emails.length} ${what} ready. Connect Google or Microsoft 365 to save them as email drafts.`);
-    app = draft.app;
-    links.push({ label: `Draft · ${e.label}`, url: draft.url });
+    const r = await deliverEmail(userId, { to: e.to, subject: e.subject, body: e.body });
+    if (!r) return notDelivered(`${emails.length} ${what} ready. Connect Google or Microsoft 365 to save them as email drafts.`);
+    results.push(r);
+    links.push({ label: `${r.sent ? "Sent" : "Draft"} · ${e.label}`, url: r.url });
   }
-  return { delivered: true, summary: `${links.length} ${what} saved as ${app} drafts. Nothing was sent.`, links };
+  return { delivered: true, summary: emailSummary(results, `${links.length} ${what}`), links };
 }
 
 /** Adds tasks to the owner's board (Trello, Asana or Notion), or null if none is connected. */

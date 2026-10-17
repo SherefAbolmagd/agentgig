@@ -24,7 +24,7 @@ const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 /** What each email-triggered agent takes, and how Ada recognises its emails. */
 const ROUTES: Record<string, { when: string; input: (m: GmailMessage, name: string | null) => Record<string, unknown> }> = {
   "order-desk": {
-    when: "a customer asking about an order they placed: where it is, delivery, tracking, or changing it",
+    when: "a customer asking about an order they placed: where it is, delivery, tracking, changing it, or a refund for a damaged, faulty or wrong item",
     input: (m) => ({ question: m.text.slice(0, 2000), customerEmail: m.fromEmail, email: reply(m) }),
   },
   "quote-builder": {
@@ -66,7 +66,7 @@ export async function ensureGmailWatch(userId: string): Promise<"watching" | "no
   return "watching";
 }
 
-/** Daily: renews every owner's watch before Gmail's 7-day expiry. */
+/** Daily: renews every owner's watch before Gmail's 7-day expiry. Shopify and Stripe webhooks don't expire. */
 export async function renewGmailWatches() {
   const snap = await db().collection(COLLECTIONS.hires).where("active", "==", true).where("trigger.event", "==", EMAIL_EVENT).get();
   const users = [...new Set(snap.docs.map((d) => (d.data() as HireDoc).userId))];

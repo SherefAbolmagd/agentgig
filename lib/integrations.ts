@@ -87,12 +87,12 @@ export const INTEGRATIONS: Record<Provider, Integration> = {
     group: "Payments",
     kind: "key",
     beta: true,
-    does: "Revenue, failed payments and overdue invoices for Revenue Pulse (read-only)",
+    does: "Revenue for Revenue Pulse, refunds you approve for Order Desk, and failed payments for Payment Rescue",
     fields: [{ id: "restrictedKey", label: "Restricted key", placeholder: "rk_live_… or rk_test_…", secret: true }],
     steps: [
       "In Stripe, open Developers → API keys → Create restricted key.",
-      "Give it Read access to Balance, Charges, Customers, Invoices, PaymentIntents and Subscriptions, and nothing else.",
-      "Copy the key (starts with rk_). AgentGig can read your figures but can never move money.",
+      "Give it Read access to Balance, Charges, Customers, Invoices, PaymentIntents and Subscriptions. For Order Desk refunds add Write on Refunds; for Payment Rescue add Write on Checkout Sessions and Webhook Endpoints.",
+      "Copy the key (starts with rk_). AgentGig only refunds or makes a payment link after you approve it, and can't move money any other way.",
     ],
   },
   mailchimp: {

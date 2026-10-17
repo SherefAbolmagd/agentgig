@@ -104,6 +104,8 @@ export interface UserDoc {
   businessProfile?: BusinessProfile;
   /** Company memory settings; missing means on, with approval for Customers and Money. */
   memory?: MemorySettings;
+  /** What approving an email does: save it as a draft (default) or send it from Gmail. */
+  emailOnApprove?: "draft" | "send";
   createdAt: Ts;
   updatedAt: Ts;
 }

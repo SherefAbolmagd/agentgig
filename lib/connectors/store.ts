@@ -26,6 +26,8 @@ export interface StoreOrder {
   total: number;
   currency: string;
   items: string[];
+  /** Line items with unit prices, when the store reports them (Shopify). */
+  lines?: { name: string; quantity: number; unitPrice: number }[];
   tracking: { company: string | null; number: string | null; url: string | null }[];
 }
 

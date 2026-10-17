@@ -18,6 +18,7 @@ import { leadFollowup } from "./lead-followup";
 import { newsletterWriter } from "./newsletter-writer";
 import { onboardingBuddy } from "./onboarding-buddy";
 import { orderDesk } from "./order-desk";
+import { paymentRescue } from "./payment-rescue";
 import { receiptHero } from "./receipthero";
 import { revenuePulse } from "./revenue-pulse";
 import { reviewPulse } from "./reviewpulse";
@@ -53,6 +54,7 @@ export const NATIVE_AGENTS: Record<string, AnyNativeAgent> = Object.fromEntries(
     bookingAssistant,
     dealNudger,
     enquiryDesk,
+    paymentRescue,
   ].map((a) => [a.slug, a]),
 );
 

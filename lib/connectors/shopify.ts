@@ -88,7 +88,7 @@ export async function shopifyFindOrders(userId: string, q: { orderNumber?: strin
         displayFinancialStatus: string;
         displayFulfillmentStatus: string;
         totalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
-        lineItems: { nodes: { name: string; quantity: number }[] };
+        lineItems: { nodes: { name: string; quantity: number; originalUnitPriceSet: { shopMoney: { amount: string } } }[] };
         fulfillments: { trackingInfo: { company: string | null; number: string | null; url: string | null }[] }[];
       }[];
     };
@@ -98,7 +98,7 @@ export async function shopifyFindOrders(userId: string, q: { orderNumber?: strin
     `query($q: String!) { orders(first: 5, query: $q, sortKey: CREATED_AT, reverse: true) { nodes {
       name processedAt displayFinancialStatus displayFulfillmentStatus
       totalPriceSet { shopMoney { amount currencyCode } }
-      lineItems(first: 20) { nodes { name quantity } }
+      lineItems(first: 20) { nodes { name quantity originalUnitPriceSet { shopMoney { amount } } } }
       fulfillments { trackingInfo { company number url } } } } }`,
     { q: query },
   );
@@ -111,6 +111,7 @@ export async function shopifyFindOrders(userId: string, q: { orderNumber?: strin
     total: Number(o.totalPriceSet.shopMoney.amount),
     currency: o.totalPriceSet.shopMoney.currencyCode,
     items: o.lineItems.nodes.map((l) => `${l.quantity} × ${l.name}`),
+    lines: o.lineItems.nodes.map((l) => ({ name: l.name, quantity: l.quantity, unitPrice: Number(l.originalUnitPriceSet.shopMoney.amount) })),
     tracking: o.fulfillments.flatMap((f) => f.trackingInfo).map((t) => ({ company: t.company, number: t.number, url: t.url })),
   }));
 }
@@ -181,4 +182,78 @@ export async function shopifyDeliveredOrders(userId: string, fromDays: number, t
       marketingConsent: o.customer?.emailMarketingConsent?.marketingState === "SUBSCRIBED",
     }];
   }).filter((o) => inWindow(o.deliveredAt, fromDays, toDays));
+}
+
+/* ---------- New orders (webhook) ---------- */
+
+export interface ShopifyNewOrder {
+  id: string;
+  number: string;
+  customerName: string | null;
+  createdAt: string;
+  fulfilmentStatus: string;
+  total: number;
+  currency: string;
+  lines: { sku: string; name: string; quantity: number }[];
+}
+
+/** One order by its Admin API ID (gid://shopify/Order/…). Null if it isn't in this store. */
+export async function shopifyOrder(userId: string, id: string): Promise<ShopifyNewOrder | null> {
+  const c = await creds(userId);
+  if (!c) return null;
+  const data = await gql<{
+    order: {
+      id: string;
+      name: string;
+      createdAt: string;
+      displayFulfillmentStatus: string;
+      customer: { firstName: string | null; lastName: string | null } | null;
+      totalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
+      lineItems: { nodes: { sku: string | null; name: string; quantity: number; variantTitle: string | null; product: { title: string } | null }[] };
+    } | null;
+  }>(
+    c.shop,
+    c.token,
+    `query($id: ID!) { order(id: $id) { id name createdAt displayFulfillmentStatus customer { firstName lastName }
+      totalPriceSet { shopMoney { amount currencyCode } }
+      lineItems(first: 50) { nodes { sku name quantity variantTitle product { title } } } } }`,
+    { id },
+  );
+  const o = data.order;
+  if (!o) return null;
+  return {
+    id: o.id,
+    number: o.name,
+    customerName: [o.customer?.firstName, o.customer?.lastName].filter(Boolean).join(" ") || null,
+    createdAt: o.createdAt,
+    fulfilmentStatus: o.displayFulfillmentStatus.toLowerCase(),
+    total: Number(o.totalPriceSet.shopMoney.amount),
+    currency: o.totalPriceSet.shopMoney.currencyCode,
+    lines: o.lineItems.nodes.map((l) => {
+      // Same naming as shopifyProducts, so order lines match stock lines.
+      const name = l.product ? (!l.variantTitle || l.variantTitle === "Default Title" ? l.product.title : `${l.product.title} · ${l.variantTitle}`) : l.name;
+      return { sku: l.sku || name, name, quantity: l.quantity };
+    }),
+  };
+}
+
+/** Asks Shopify to call `callbackUrl` whenever an order is created. Idempotent. */
+export async function shopifyEnsureOrderWebhook(userId: string, callbackUrl: string): Promise<"created" | "exists" | null> {
+  const c = await creds(userId);
+  if (!c) return null;
+  const existing = await gql<{ webhookSubscriptions: { nodes: { id: string; uri: string }[] } }>(
+    c.shop,
+    c.token,
+    `{ webhookSubscriptions(first: 50, topics: [ORDERS_CREATE]) { nodes { id uri } } }`,
+  );
+  if (existing.webhookSubscriptions.nodes.some((w) => w.uri === callbackUrl)) return "exists";
+  const made = await gql<{ webhookSubscriptionCreate: { userErrors: { message: string }[] } }>(
+    c.shop,
+    c.token,
+    `mutation($uri: String!) { webhookSubscriptionCreate(topic: ORDERS_CREATE, webhookSubscription: { uri: $uri, format: JSON }) { userErrors { message } } }`,
+    { uri: callbackUrl },
+  );
+  const err = made.webhookSubscriptionCreate.userErrors[0];
+  if (err) throw new GatewayError("AGENT_FAILED", `Shopify wouldn't send order notifications: ${err.message}`);
+  return "created";
 }

@@ -35,6 +35,7 @@ export default function KnowledgePage() {
             </div>
             <ConnectionsPanel returnTo="/knowledge" />
           </section>
+          {!me.loading && <ApprovedEmails key={me.data?.emailOnApprove ?? "draft"} current={me.data?.emailOnApprove ?? "draft"} />}
           <Files />
         </div>
       </div>
@@ -121,6 +122,56 @@ function Field({ name, label, hint, error, children }: { name: string; label: st
       {children}
       {error ? <p className="text-xs text-destructive">{error}</p> : hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
+  );
+}
+
+const EMAIL_MODES = [
+  { id: "draft", label: "Save it as a draft", hint: "It waits in your Gmail or Outlook drafts for you to send." },
+  { id: "send", label: "Send it", hint: "It goes out from your Gmail as soon as you approve. Emails with no recipient are still saved as drafts." },
+] as const;
+
+/** What approving an agent's email does: save it as a draft (the default) or send it. */
+function ApprovedEmails({ current }: { current: "draft" | "send" }) {
+  const [mode, setMode] = useState(current);
+  const [saving, setSaving] = useState(false);
+
+  async function choose(next: "draft" | "send") {
+    if (next === mode) return;
+    setSaving(true);
+    try {
+      await api("/api/me/email", { method: "PUT", json: { emailOnApprove: next } });
+      setMode(next);
+      toast.success(next === "send" ? "Approved emails will be sent from Gmail." : "Approved emails will be saved as drafts.");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="grid gap-3 rounded-xl border bg-card p-5">
+      <div>
+        <h2 className="font-display text-lg font-bold">When you approve an email</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Agents never email anyone before you approve. This decides what your approval does.</p>
+      </div>
+      <div role="radiogroup" aria-label="When you approve an email" className="grid gap-2">
+        {EMAIL_MODES.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            role="radio"
+            aria-checked={mode === m.id}
+            disabled={saving}
+            onClick={() => choose(m.id)}
+            className={`grid gap-0.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${mode === m.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}
+          >
+            <span className="text-sm font-medium">{m.label}</span>
+            <span className="text-xs text-muted-foreground">{m.hint}</span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

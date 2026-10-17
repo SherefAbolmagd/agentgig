@@ -296,11 +296,9 @@ export async function finishConnect(provider: Provider, code: string, state: str
       },
       { merge: true },
     );
-  if (provider === "google") {
-    // Reconnecting can grant Gmail access that email-triggered agents were waiting for.
-    const { ensureGmailWatch } = await import("@/lib/email-trigger");
-    await ensureGmailWatch(saved.userId).catch((err) => console.error("gmail watch failed", err));
-  }
+  // A (re)connection can be what event-triggered agents were waiting for, e.g. Gmail access.
+  const { ensureEventSources } = await import("@/lib/event-sources");
+  await ensureEventSources(saved.userId);
   return { returnTo: saved.returnTo };
 }
 
