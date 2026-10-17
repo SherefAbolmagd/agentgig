@@ -53,12 +53,16 @@ async function music(out: string) {
   if (made < 4) throw new Error(`Only ${made} music clips were generated.`);
 }
 
+/** How names are spoken; the captions keep the written form. TTS reads "Ada" as letters. */
+const SAY: [RegExp, string][] = [[/\bAda\b/g, "Ayda"]];
+const spoken = (text: string) => SAY.reduce((t, [re, say]) => t.replace(re, say), text);
+
 async function voice(name: string, linesFile: string, out: string) {
   mkdirSync(out, { recursive: true });
   const lines = JSON.parse(readFileSync(linesFile, "utf8")) as Record<string, string>;
   for (const [key, text] of Object.entries(lines)) {
     const res = await post<{ audioContent: string }>("https://texttospeech.googleapis.com/v1beta1/text:synthesize", {
-      input: { prompt: STYLE, text },
+      input: { prompt: STYLE, text: spoken(text) },
       voice: { languageCode: "en-GB", name, modelName: "gemini-2.5-pro-tts" },
       audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 48000 },
     });
