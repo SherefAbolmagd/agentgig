@@ -32,11 +32,6 @@ const at = (label: string) => {
   if (!m) throw new Error(`No mark "${label}"`);
   return m.t;
 };
-const message = (match: RegExp) => {
-  const e = events.find((x) => x.kind === "message" && match.test(x.text ?? ""));
-  if (!e) throw new Error(`No Telegram message matching ${match}`);
-  return e.t;
-};
 const wavSeconds = (file: string) => (statSync(file).size - 44) / (48000 * 2 * (file.includes("music") ? 2 : 1));
 
 /* ------------------------------------------------------------------ */
@@ -81,34 +76,41 @@ const voiceLen = (key: string) => wavSeconds(`${ROOT}/public/audio/voice/${key}.
 const p = (from: number, to: number, speed = 1, wait = false): Piece => ({ from, to, speed, wait });
 const w = (from: number, to: number) => p(from, to, 1, true);
 
-const firstMessage = message(/overcharged by/);
-const approved = message(/drafted a correction/);
-const tap = events.find((e) => e.kind === "click" && e.page === "tg" && e.t > firstMessage)!.t;
+// Cold open: "where's my order?", answered from Sam's phone.
+const has = (label: string) => marks.some((m) => m.label === label);
+const cold: Piece[] = [p(at("cold"), at("cold") + 3), w(at("cold") + 3, at("cold draft") - 0.8), p(at("cold draft") - 0.8, at("scene 3 home"))];
 
-// Cold open: the overcharge arrives on Sam's phone and is fixed with one tap.
-const cold: Piece[] = [p(firstMessage - 1.2, firstMessage + 1.6), p(firstMessage + 1.6, tap - 1.2, 4), p(tap - 1.2, tap + 0.8), p(tap + 0.8, approved - 0.4, 3), p(approved - 0.4, approved + 1.8)];
+/** The next scene's start after `label` (scene 5 is only there when Stripe is connected). */
+const nextScene = (after: string) => marks.find((m) => /^scene \d+/.test(m.label) && m.t > at(after))?.t ?? at("end");
 
 const scenes: { key: string; pieces: Piece[] }[] = [
-  { key: "02", pieces: [p(at("scene 2 home"), at("scene 3 knowledge"))] },
-  { key: "03", pieces: [p(at("scene 3 knowledge"), at("scene 4 hire"))] },
-  { key: "04", pieces: [p(at("scene 4 hire"), at("scene 5 invoices"))] },
-  { key: "05", pieces: [p(at("scene 5 invoices"), at("invoices dropped")), w(at("invoices dropped"), firstMessage - 1), p(firstMessage - 1, at("invoice draft in telegram"))] },
-  { key: "06", pieces: [p(at("invoice draft in telegram"), at("scene 7 vat"))] },
-  { key: "07", pieces: [p(at("scene 7 vat"), at("scene 7 vat") + 4), w(at("scene 7 vat") + 4, message(/VAT to reclaim/) - 1), p(message(/VAT to reclaim/) - 1, at("scene 8 quote"))] },
-  { key: "08", pieces: [p(at("scene 8 quote"), at("scene 8 quote") + 3), w(at("scene 8 quote") + 3, message(/Quote Q-/) - 1), p(message(/Quote Q-/) - 1, at("scene 9 review"))] },
-  { key: "09", pieces: [p(at("scene 9 review"), at("scene 9 review") + 3), w(at("scene 9 review") + 3, message(/review needs attention|Reply ready/) - 1), p(message(/review needs attention|Reply ready/) - 1, at("scene 10 rota"))] },
-  { key: "10", pieces: [p(at("scene 10 rota"), at("scene 10 rota") + 7), w(at("scene 10 rota") + 7, at("rota ready") - 1), p(at("rota ready") - 1, at("scene 11 cost"))] },
-  { key: "11", pieces: [p(at("scene 11 cost"), at("scene 11 cost") + 3), w(at("scene 11 cost") + 3, message(/tokens/) - 1), p(message(/tokens/) - 1, at("end"))] },
+  { key: "03", pieces: [p(at("scene 3 home"), at("scene 4 stock"))] },
+  { key: "04", pieces: [p(at("scene 4 stock"), at("scene 4 stock") + 4), w(at("scene 4 stock") + 4, at("stock ready") - 0.8), p(at("stock ready") - 0.8, nextScene("scene 4 stock"))] },
+  ...(has("scene 5 revenue")
+    ? [{ key: "05", pieces: [p(at("scene 5 revenue"), at("voice sent") + 1), w(at("voice sent") + 1, at("revenue posted") - 0.8), p(at("revenue posted") - 0.8, at("scene 6 hire"))] }]
+    : []),
+  { key: "06", pieces: [p(at("scene 6 hire"), at("scene 7 winback"))] },
+  { key: "07", pieces: [p(at("scene 7 winback"), at("scene 7 winback") + 3), w(at("scene 7 winback") + 3, at("winback ready") - 0.8), p(at("winback ready") - 0.8, at("scene 8 quote"))] },
+  { key: "08", pieces: [p(at("scene 8 quote"), at("scene 8 quote") + 3), w(at("scene 8 quote") + 3, at("quote posted") - 0.8), p(at("quote posted") - 0.8, at("scene 9 drive"))] },
+  {
+    key: "09",
+    // The 5-minute Drive check is skipped: the glance at the folder runs into the check.
+    pieces: [p(at("scene 9 drive"), at("drive checked")), w(at("drive checked"), at("invoice draft") - 0.8), p(at("invoice draft") - 0.8, at("scene 10 memory"))],
+  },
+  { key: "10", pieces: [p(at("scene 10 memory"), at("fact approved") + 3), w(at("fact approved") + 3, at("memory answered") - 0.8), p(at("memory answered") - 0.8, at("scene 11 team"))] },
+  { key: "11", pieces: [p(at("scene 11 team"), at("scene 12 developers"))] },
+  { key: "12", pieces: [p(at("scene 12 developers"), at("scene 12 developers") + 5), w(at("scene 12 developers") + 5, at("partner listed") - 0.8), p(at("partner listed") - 0.8, at("scene 13 cost"))] },
+  { key: "13", pieces: [p(at("scene 13 cost"), at("scene 13 cost") + 3), w(at("scene 13 cost") + 3, at("cost answered") - 0.8), p(at("cost answered") - 0.8, at("end"))] },
 ];
 
 const piecesLen = (ps: Piece[], waitSpeed: number) => ps.reduce((n, x) => n + (x.to - x.from) / (x.wait ? waitSpeed : x.speed), 0);
 const sceneLen = (sc: { key: string; pieces: Piece[] }, waitSpeed: number) => Math.max(piecesLen(sc.pieces, waitSpeed), voiceLen(sc.key) + LEAD + TAIL);
 const TITLE = voiceLen("01") + LEAD + 1.0;
-const ARCH = voiceLen("12") + LEAD + 0.6;
+const ARCH = voiceLen("14") + LEAD + 0.6;
 const STATS = 3.8;
 const END = 4.0;
-const fixed = piecesLen(cold, 1) + TITLE + ARCH + STATS + END;
-const waitSpeed = [1, 1.5, 2, 3, 4, 6].find((s) => fixed + scenes.reduce((n, sc) => n + sceneLen(sc, s), 0) <= MAX_TOTAL) ?? 6;
+const fixed = TITLE + ARCH + STATS + END;
+const waitSpeed = [1, 1.5, 2, 3, 4, 6].find((s) => fixed + piecesLen(cold, s) + scenes.reduce((n, sc) => n + sceneLen(sc, s), 0) <= MAX_TOTAL) ?? 6;
 
 const segments: Segment[] = [];
 let t = 0;
@@ -129,11 +131,11 @@ const place = (kind: "cold" | "scene", key: string | undefined, ps: Piece[], min
   }
   segments.push({ kind, key, start, dur: t - start, pieces: out });
 };
-place("cold", undefined, cold);
+place("scene", undefined, cold);
 segments.push({ kind: "title", key: "01", start: t, dur: TITLE });
 t += TITLE;
 for (const sc of scenes) place("scene", sc.key, sc.pieces, voiceLen(sc.key) + LEAD + TAIL);
-segments.push({ kind: "arch", key: "12", start: t, dur: ARCH });
+segments.push({ kind: "arch", key: "14", start: t, dur: ARCH });
 t += ARCH;
 segments.push({ kind: "stats", start: t, dur: STATS });
 t += STATS;
@@ -157,7 +159,7 @@ for (const seg of segments) {
 const toOutAll = (src: number): number[] =>
   segments.flatMap((s) => ("pieces" in s ? s.pieces.filter((x) => !x.hold && src >= x.from && src < x.to).map((x) => x.outStart + (src - x.from) / x.speed) : []));
 /** When a moment of the take appears in the story's scenes, if it does. */
-const toOut = (src: number): number | null => toOutAll(src).filter((o) => o >= sceneStart("02")).shift() ?? null;
+const toOut = (src: number): number | null => toOutAll(src).filter((o) => o >= (segments.find((s) => s.kind === "scene" && s.key)?.start ?? 0)).shift() ?? null;
 
 const sceneStart = (key: string) => segments.find((s) => s.key === key)!.start;
 const voice = segments.filter((s) => s.key).map((s) => ({ key: s.key!, start: s.start + LEAD, dur: voiceLen(s.key!) }));
@@ -176,16 +178,22 @@ const captions = voice.flatMap(({ key, start, dur }) => {
 
 const callout = (outT: number | null, text: string, sub?: string) => (outT === null ? [] : [{ start: outT, end: outT + 3.4, text, sub }]);
 const callouts = [
-  ...callout(sceneStart("03") + 1.5, "Grounded in your business", "Profile · files · shared memory"),
-  ...callout(sceneStart("04") + 2, "Hire in a few clicks", "Priced per finished task"),
-  ...callout(toOut(firstMessage), "£38.40 overcharge caught", "Gemini reads it · code checks the sums"),
-  ...callout(toOut(approved), "Approved from Sam's phone", "Logged to Sheets · correction drafted in Gmail"),
-  ...callout(toOut(message(/VAT to reclaim/)), "A partner company's agent", "Handed the work over A2A, never Sam's logins"),
-  ...callout(toOut(message(/Quote Q-/)), "Priced from Sam's own list", "Saved as a Gmail draft"),
-  ...callout(toOut(message(/Got it|I've saved|I've noted/i)), "Shared company memory", "Every agent knows it now"),
-  ...callout(toOut(message(/review needs attention|Reply ready/)), "Nothing goes out without an OK", "Approve · Edit · Skip"),
-  ...callout(toOut(at("rota ready")), "Every shift checked in code", "Availability and hours"),
-  ...callout(toOut(message(/tokens/)), "Charged only for finished work", "Failed tasks are free"),
+  ...callout(toOutAll(at("cold") + 1)[0] ?? null, "A customer asks: where's my order?", "Sam forwards it to Ada on Telegram"),
+  ...callout(toOutAll(at("cold draft"))[0] ?? null, "Found in Shopify, reply drafted", "Shipped · Royal Mail tracking included"),
+  ...callout(sceneStart("03") + 1.5, "One team for the whole shop", "Orders · stock · money · customers"),
+  ...callout(sceneStart("04") + 1.2, "Runs by itself every morning", "Started by hand for the demo"),
+  ...callout(toOut(at("stock ready")), "Two products running low", "Reorder email drafted"),
+  ...callout(toOut(at("drafts shown")), "Waiting in Gmail", "Nothing is sent without Sam"),
+  ...(has("revenue posted") ? callout(toOut(at("revenue posted")), "This week's takings from Stripe", "And one declined card") : []),
+  ...callout(sceneStart("06") + 1.5, "Hired in seconds", "Works in Sam's Shopify · 30-token monthly cap"),
+  ...callout(toOut(at("winback ready")), "4 customers to win back", "Only those who opted in to emails"),
+  ...callout(toOut(at("quote posted")), "Priced from Sam's own list", "Volume discounts applied"),
+  ...callout(toOut(at("drive upload")), "Lands in Google Drive", "The folder is checked every 5 minutes"),
+  ...callout(toOut(at("invoice draft")), "£22.00 overcharge caught", "Gemini reads it · code checks the sums"),
+  ...callout(toOut(at("fact approved")), "Memory with a human check", "Customer and money facts need an OK"),
+  ...callout(toOut(at("invite created")), "Roles for the whole team", "Managers approve · the owner pays"),
+  ...callout(toOut(at("partner listed")), "Five live checks, then listed", "Partners earn 80% of the tokens"),
+  ...callout(toOut(at("cost answered")), "Charged only for finished work", "Failed tasks are free"),
 ];
 
 /* ------------------------------------------------------------------ */
@@ -269,7 +277,7 @@ const camera = Object.fromEntries(segments.filter((s): s is Extract<Segment, { k
 const sounds = [
   ...events.filter((e) => e.kind === "message").flatMap((e) => toOutAll(e.t).map((at) => ({ at, src: "ping" }))),
   ...events.filter((e) => e.kind === "click").flatMap((e) => toOutAll(e.t).map((at) => ({ at, src: "tap" }))),
-  ...segments.filter((s) => s.kind !== "scene" || s.key === "02").slice(1).map((s) => ({ at: s.start - 0.25, src: "whoosh" })),
+  ...segments.filter((s) => s.kind !== "scene" || s.key === "03").map((s) => ({ at: s.start - 0.25, src: "whoosh" })),
 ].filter((s): s is { at: number; src: string } => s.at !== null);
 
 writeFileSync(

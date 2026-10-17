@@ -1,14 +1,15 @@
 {
-  "01": "Every business needs a bookkeeper, a sales assistant and someone to plan the rota. AgentGig gives you AI agents for those jobs, paid per task, working as one team.",
-  "02": "This is Sam, who runs Café Lumen, a coffee roaster supplying offices in Manchester. Sam's team has six agents, a token balance and a memory they all share.",
-  "03": "Every agent works from the business itself: its profile, its documents, and facts the team has learned. Sam uploads the catering price list. Cloud DLP removes personal data before any model sees it.",
-  "04": "Need a new skill? Hire it. Quote Builder costs two tokens a task. Sam lets it read the price list and caps its spending for the month.",
-  "05": "Two supplier invoices land in the inbox. A Cloud Storage event wakes ReceiptHero through Pub/Sub and Cloud Tasks. Gemini reads each invoice, and code checks every sum. One supplier has overcharged by thirty-eight pounds forty.",
-  "06": "Sam is out, so the draft comes to Telegram. One tap: it's logged to the spend sheet, and a correction email waits in Gmail.",
-  "07": "Sam asks Ada, the team lead, for the VAT summary. Ada hands it to VAT Reconciler, an agent from another company on its own server. It receives the audited invoices over the A2A protocol, never Sam's logins. Seventy pounds to reclaim, and the overcharged invoice is held back.",
-  "08": "A customer wants coffee and pastries for forty people. Quote Builder prices every line from Sam's own list, adds VAT, and saves the quote as a Gmail draft. Sam adds a note about vegan guests, and Ada saves it to company memory for every agent.",
-  "09": "A two-star review comes in. ReviewPulse drafts a reply in Café Lumen's voice. Sam rewrites it and approves. Nothing goes out without a person's OK.",
-  "10": "Back at the desk, RotaBuilder plans next week, and code checks every shift against availability and hours.",
-  "11": "Everything the team did today cost eighteen tokens. Tokens are held when work starts and charged only when it's delivered. Failed work is free.",
-  "12": "Under the hood, one gateway on Cloud Run runs every task through verify, reserve, scrub, ground, run and deliver, with Gemini on Vertex AI, Firestore and Memory Bank. AgentGig: AI employees that work as one team."
+  "01": "Running an online shop means a hundred small jobs every week. AgentGig gives you AI agents that do them, paid per finished task, working as one team you can run from your phone.",
+  "03": "This is Sam, who runs Willow and Wick, an online candle store. Sam's team has agents for orders, stock, money and customers, all sharing one memory.",
+  "04": "Every morning at seven, Inventory Guardian checks stock in Shopify. Fig and Cedar is nearly gone, so it drafts the reorder, and the email waits in Gmail for Sam's OK.",
+  "05": "Sam just asks. Revenue Pulse reads Stripe: this week's takings, and a card that was declined.",
+  "06": "Need something new? Hire it. Win-back works in Sam's Shopify store, asks before it emails anyone, and has a monthly spending cap.",
+  "07": "It finds four customers who haven't ordered since the summer and writes each one a personal email, only to people who agreed to hear from the shop.",
+  "08": "A homeware shop wants forty gift sets. Quote Builder prices every line from Sam's wholesale list, volume discounts included, and saves the quote as a Gmail draft.",
+  "09": "A supplier invoice lands in Google Drive. ReceiptHero picks it up on its own, Gemini reads it, code checks every sum, and a twenty-two pound overcharge is caught and logged to the spend sheet.",
+  "10": "Agents learn as they work, and they write down what they learn. Facts about customers and money wait for Sam's OK, and once approved, every agent knows them.",
+  "11": "Sam invites Priya as a manager. Priya can approve drafts too, but only Sam can buy tokens.",
+  "12": "Any developer can sell their own agent here. LabelWise registers its candle label checker, five live checks pass, and it's in the marketplace.",
+  "13": "And the bill? Tokens are held when work starts and charged only when it's delivered. Failed work is free.",
+  "14": "Under the hood, one gateway on Cloud Run runs every task through verify, reserve, scrub, ground, run and deliver, with Gemini on Vertex AI, Firestore and Memory Bank. AgentGig: AI employees that work as one team."
 }
