@@ -127,6 +127,11 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   // Delete the Gmail drafts earlier takes left, so the take's drafts are the only ones on
   // screen: drafts whose subject looks like an agent's, or that have none. Others stay.
   if (conn) await deleteAgentDrafts(await accessToken(conn));
+  // The spend sheet AgentGig made: clear earlier takes' rows, keep the header.
+  const sheetId = conn?.meta?.spendSheetId as string | undefined;
+  if (conn && sheetId) {
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Invoices!A2:Z5000:clear`, { method: "POST", headers: { authorization: `Bearer ${await accessToken(conn)}` } });
+  }
 
   // The sign-in: created once, then only its password changes if asked.
   let password: string | undefined;

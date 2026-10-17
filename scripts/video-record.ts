@@ -152,7 +152,7 @@ async function main() {
     await tg.waitFor(/drafted a correction email/);
     mark("invoice approved");
     const sheet = (await getConnection(UID, "google"))?.meta?.spendSheetId as string | undefined;
-    if (sheet) await web.glance(`https://docs.google.com/spreadsheets/d/${sheet}`, (g) => g.getByText(/NW-3317|Northern Wax/).filter({ visible: true }).first(), 2500);
+    if (sheet) await web.glance(`https://docs.google.com/spreadsheets/d/${sheet}`, (g) => g.locator("#waffle-grid-container").first(), 2500);
 
     /* 10 · Memory: a fact waits for Sam's OK, then Ada uses it */
     mark("scene 10 memory");
