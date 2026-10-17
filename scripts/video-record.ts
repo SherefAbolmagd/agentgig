@@ -165,7 +165,7 @@ async function main() {
     await web.click(northside.getByRole("button", { name: "Remember it" }));
     mark("fact approved");
     await web.pause(1200);
-    await tg.ask("Who's slow to pay us?", /Northside/);
+    await tg.ask("What do we know about how Northside Interiors pays?", /Northside/);
     mark("memory answered");
 
     /* 11 · Team: invite Priya as a manager */
