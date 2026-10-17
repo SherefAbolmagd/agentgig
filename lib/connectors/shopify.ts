@@ -120,23 +120,25 @@ export async function shopifyLapsedCustomers(userId: string, days: number): Prom
   if (!c) return null;
   const before = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
   const data = await gql<{
-    customers: { nodes: { firstName: string | null; email: string | null; numberOfOrders: string; amountSpent: { amount: string; currencyCode: string }; lastOrder: { createdAt: string; name: string } | null; emailMarketingConsent: { marketingState: string } | null }[] };
+    customers: { nodes: { firstName: string | null; email: string | null; numberOfOrders: string; amountSpent: { amount: string; currencyCode: string }; lastOrder: { processedAt: string; name: string } | null; emailMarketingConsent: { marketingState: string } | null }[] };
   }>(
     c.shop,
     c.token,
     `query($q: String!) { customers(first: 50, query: $q, sortKey: UPDATED_AT, reverse: true) { nodes {
-      firstName email numberOfOrders amountSpent { amount currencyCode } lastOrder { createdAt name } emailMarketingConsent { marketingState } } } }`,
+      firstName email numberOfOrders amountSpent { amount currencyCode } lastOrder { processedAt name } emailMarketingConsent { marketingState } } } }`,
     { q: `orders_count:>0 AND last_order_date:<${before}` },
   );
   return data.customers.nodes
-    .filter((n) => n.email && n.lastOrder)
+    // processedAt is when the order was placed; createdAt is when Shopify stored it, which differs for imported orders.
+    // Filtered here too: the search's last_order_date doesn't always narrow the list.
+    .filter((n) => n.email && n.lastOrder && n.lastOrder.processedAt.slice(0, 10) < before)
     .map((n) => ({
       firstName: n.firstName ?? "",
       email: n.email!,
       orders: Number(n.numberOfOrders),
       spent: Number(n.amountSpent.amount),
       currency: n.amountSpent.currencyCode,
-      lastOrderAt: n.lastOrder!.createdAt,
+      lastOrderAt: n.lastOrder!.processedAt,
       marketingConsent: n.emailMarketingConsent?.marketingState === "SUBSCRIBED",
     }));
 }
