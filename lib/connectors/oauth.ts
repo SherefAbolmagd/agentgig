@@ -56,6 +56,8 @@ export function providerConfig(provider: Provider): ProviderConfig {
           "https://www.googleapis.com/auth/drive.readonly",
           "https://www.googleapis.com/auth/drive.file",
           "https://www.googleapis.com/auth/gmail.compose",
+          // Read new inbox emails for agents that work on them, and label the ones they pick up.
+          "https://www.googleapis.com/auth/gmail.modify",
           "https://www.googleapis.com/auth/spreadsheets",
           "https://www.googleapis.com/auth/calendar.readonly",
         ],
@@ -291,6 +293,11 @@ export async function finishConnect(provider: Provider, code: string, state: str
       },
       { merge: true },
     );
+  if (provider === "google") {
+    // Reconnecting can grant Gmail access that email-triggered agents were waiting for.
+    const { ensureGmailWatch } = await import("@/lib/email-trigger");
+    await ensureGmailWatch(saved.userId).catch((err) => console.error("gmail watch failed", err));
+  }
   return { returnTo: saved.returnTo };
 }
 

@@ -22,19 +22,127 @@ async function call<T>(token: string, url: string, init: RequestInit = {}): Prom
   return (await res.json()) as T;
 }
 
-/** Creates a Gmail draft (never sends). Returns null if Google isn't connected. */
-export async function gmailCreateDraft(userId: string, mail: { to?: string | null; subject: string; body: string }) {
+/** Where a reply belongs: the Gmail thread and the Message-ID header of the email being answered. */
+export interface GmailReplyTo {
+  threadId: string;
+  messageId: string;
+}
+
+/** Creates a Gmail draft (never sends), threaded under the email it answers when given. Null if Google isn't connected. */
+export async function gmailCreateDraft(userId: string, mail: { to?: string | null; subject: string; body: string; replyTo?: GmailReplyTo | null }) {
   const g = await google(userId);
   if (!g) return null;
-  const headers = [mail.to ? `To: ${mail.to}` : null, `Subject: =?UTF-8?B?${Buffer.from(mail.subject).toString("base64")}?=`, "MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64"]
+  const r = mail.replyTo;
+  const headers = [
+    mail.to ? `To: ${mail.to}` : null,
+    r ? `In-Reply-To: ${r.messageId}` : null,
+    r ? `References: ${r.messageId}` : null,
+    `Subject: =?UTF-8?B?${Buffer.from(mail.subject).toString("base64")}?=`, "MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64",
+  ]
     .filter(Boolean)
     .join("\r\n");
   const raw = Buffer.from(`${headers}\r\n\r\n${Buffer.from(mail.body).toString("base64")}`).toString("base64url");
   const draft = await call<{ id: string; message: { id: string } }>(g.token, "https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
     method: "POST",
-    body: JSON.stringify({ message: { raw } }),
+    body: JSON.stringify({ message: { raw, ...(r && { threadId: r.threadId }) } }),
   });
   return { draftId: draft.id, url: `https://mail.google.com/mail/u/0/#drafts?compose=${draft.message.id}` };
+}
+
+/* ---------- Gmail inbox ---------- */
+
+/** Asks Gmail to publish inbox changes to our Pub/Sub topic. Lasts 7 days; renewed daily. */
+export async function gmailWatch(userId: string, topicName: string): Promise<{ email: string; historyId: string; expiration: number } | null> {
+  const g = await google(userId);
+  if (!g) return null;
+  const w = await call<{ historyId: string; expiration: string }>(g.token, "https://gmail.googleapis.com/gmail/v1/users/me/watch", {
+    method: "POST",
+    body: JSON.stringify({ topicName, labelIds: ["INBOX"], labelFilterBehavior: "include" }),
+  });
+  const me = await call<{ emailAddress: string }>(g.token, "https://gmail.googleapis.com/gmail/v1/users/me/profile");
+  return { email: me.emailAddress.toLowerCase(), historyId: w.historyId, expiration: Number(w.expiration) };
+}
+
+/** IDs of messages added to the inbox since a history ID, and the mailbox's latest history ID. */
+export async function gmailInboxSince(userId: string, startHistoryId: string): Promise<{ messageIds: string[]; historyId: string } | null> {
+  const g = await google(userId);
+  if (!g) return null;
+  const ids = new Set<string>();
+  let historyId = startHistoryId;
+  let pageToken: string | undefined;
+  do {
+    const q = new URLSearchParams({ startHistoryId, historyTypes: "messageAdded", labelId: "INBOX", ...(pageToken && { pageToken }) });
+    const page = await call<{ history?: { messagesAdded?: { message: { id: string; labelIds?: string[] } }[] }[]; historyId: string; nextPageToken?: string }>(
+      g.token,
+      `https://gmail.googleapis.com/gmail/v1/users/me/history?${q}`,
+    );
+    for (const h of page.history ?? []) for (const m of h.messagesAdded ?? []) if (m.message.labelIds?.includes("INBOX")) ids.add(m.message.id);
+    historyId = page.historyId;
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  return { messageIds: [...ids], historyId };
+}
+
+export interface GmailMessage {
+  id: string;
+  threadId: string;
+  /** The Message-ID header, for threading a reply. */
+  messageId: string;
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  text: string;
+  labelIds: string[];
+}
+
+type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[] };
+
+function plainText(part: GmailPart): string {
+  if (part.mimeType === "text/plain" && part.body?.data) return Buffer.from(part.body.data, "base64url").toString("utf8");
+  for (const p of part.parts ?? []) {
+    const t = plainText(p);
+    if (t) return t;
+  }
+  if (part.mimeType === "text/html" && part.body?.data) {
+    return Buffer.from(part.body.data, "base64url").toString("utf8").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
+  }
+  return "";
+}
+
+export async function gmailRead(userId: string, id: string): Promise<GmailMessage | null> {
+  const g = await google(userId);
+  if (!g) return null;
+  const m = await call<{ id: string; threadId: string; labelIds?: string[]; payload: GmailPart & { headers?: { name: string; value: string }[] } }>(
+    g.token,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
+  );
+  const header = (n: string) => m.payload.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? "";
+  const from = header("from");
+  const fromEmail = (from.match(/<([^>]+)>/)?.[1] ?? from).trim().toLowerCase();
+  return {
+    id: m.id,
+    threadId: m.threadId,
+    messageId: header("message-id"),
+    fromName: from.replace(/<[^>]+>/, "").replace(/"/g, "").trim(),
+    fromEmail,
+    subject: header("subject"),
+    text: plainText(m.payload).trim(),
+    labelIds: m.labelIds ?? [],
+  };
+}
+
+export const GMAIL_LABEL = "AgentGig";
+
+/** Labels an email "AgentGig" so the owner can see which emails an agent picked up. */
+export async function gmailLabelHandled(userId: string, id: string): Promise<void> {
+  const g = await google(userId);
+  if (!g) return;
+  const base = "https://gmail.googleapis.com/gmail/v1/users/me";
+  const { labels } = await call<{ labels: { id: string; name: string }[] }>(g.token, `${base}/labels`);
+  const label =
+    labels.find((l) => l.name === GMAIL_LABEL) ??
+    (await call<{ id: string; name: string }>(g.token, `${base}/labels`, { method: "POST", body: JSON.stringify({ name: GMAIL_LABEL }) }));
+  await call(g.token, `${base}/messages/${id}/modify`, { method: "POST", body: JSON.stringify({ addLabelIds: [label.id] }) });
 }
 
 /** Appends a row to the owner's spend log sheet, creating the sheet on first use. */

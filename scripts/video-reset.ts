@@ -40,10 +40,10 @@ const STORE = {
 
 /** The team Sam already has when the video starts; Win-back is hired on camera. */
 const TEAM: { agentId: string; triggerId: string; approvalMode: "ask" | "auto"; priceList?: true }[] = [
-  { agentId: "order-desk", triggerId: "manual", approvalMode: "ask" },
+  { agentId: "order-desk", triggerId: "email", approvalMode: "ask" },
   { agentId: "inventory-guardian", triggerId: "daily-0700", approvalMode: "ask" },
   { agentId: "revenue-pulse", triggerId: "mon-0800", approvalMode: "ask" },
-  { agentId: "quote-builder", triggerId: "manual", approvalMode: "ask", priceList: true },
+  { agentId: "quote-builder", triggerId: "email", approvalMode: "ask", priceList: true },
   { agentId: "receipthero", triggerId: "drive", approvalMode: "ask" },
 ];
 

@@ -40,7 +40,7 @@ export async function hireAgent(userId: string, req: HireRequest): Promise<HireD
   const knowledgeAccess = await allowedKnowledge(userId, req.knowledgeAccess);
   const hireRef = store.collection(COLLECTIONS.hires).doc(`${userId}_${agent.slug}`);
 
-  return store.runTransaction(async (tx) => {
+  const hired = await store.runTransaction(async (tx) => {
     const existing = await tx.get(hireRef);
     const previous = existing.data() as HireDoc | undefined;
     const shelves = req.memory ?? previous?.memory ?? defaultShelves(agent);
@@ -62,6 +62,12 @@ export async function hireAgent(userId: string, req: HireRequest): Promise<HireD
     tx.set(hireRef, hire, { merge: true });
     return hire as unknown as HireDoc;
   });
+  // Agents that work on new emails need Gmail's push switched on for this inbox.
+  if (trigger.type === "event" && trigger.event === "gmail.message") {
+    const { ensureGmailWatch } = await import("./email-trigger");
+    await ensureGmailWatch(userId).catch((err) => console.error("gmail watch failed", err));
+  }
+  return hired;
 }
 
 export async function releaseAgent(userId: string, agentId: string): Promise<void> {

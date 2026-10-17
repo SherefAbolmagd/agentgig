@@ -15,10 +15,11 @@ import { isGatewayError } from "./errors";
 import { COLLECTIONS, type AgentDoc, type HireDoc, type TaskDoc, type UserDoc } from "@/types/firestore";
 
 /**
- * Work that starts without a click. Schedules (Cloud Scheduler → /api/triggers/cron)
- * and invoice-inbox uploads (Cloud Storage → Pub/Sub → /api/triggers/inbox)
- * become jobs on a Cloud Tasks queue, which calls /api/tasks/run with
- * retries. Each job has a deterministic ID, so a duplicate event runs once.
+ * Work that starts without a click. Schedules (Cloud Scheduler → /api/triggers/cron),
+ * invoice-inbox uploads (Cloud Storage → Pub/Sub → /api/triggers/inbox) and new
+ * Gmail emails (Gmail → Pub/Sub → /api/triggers/gmail) become jobs on a Cloud
+ * Tasks queue, which calls /api/tasks/run with retries. Each job has a
+ * deterministic ID, so a duplicate event runs once.
  */
 
 export interface Job {
@@ -40,6 +41,8 @@ export interface Job {
   syncMemory?: true;
   /** A Telegram message or button tap for the supervisor. */
   telegram?: TelegramJob;
+  /** A new Gmail inbox email, for Ada to hand to the agent it belongs to (lib/email-trigger). */
+  gmailMessageId?: string;
 }
 
 let tasksClient: CloudTasksClient | undefined;
@@ -87,6 +90,20 @@ export async function runJob(job: Job): Promise<{ status: string }> {
   if (job.publishTaskId) return publishTask(job.publishTaskId, job.userId);
   if (job.rememberTaskId) return rememberJob(job.rememberTaskId);
   if (job.telegram) return { status: await runTelegramJob(job.telegram) };
+  if (job.gmailMessageId) {
+    const { routeEmail } = await import("./email-trigger");
+    try {
+      const res = await routeEmail(job.userId, job.gmailMessageId, job.key);
+      log("job.done", { key: job.key, status: res.status });
+      return res;
+    } catch (err) {
+      if (isGatewayError(err) && err.code !== "BUSY") {
+        log("job.not_run", { key: job.key, code: err.code });
+        return { status: `not run: ${err.code}` };
+      }
+      throw err;
+    }
+  }
   if (job.syncMemory) {
     const moved = await syncToBank(job.userId);
     log("job.memory_synced", { key: job.key, moved });

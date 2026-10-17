@@ -1,5 +1,17 @@
 import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
 import { createTasks, type NewTask } from "@/lib/connectors/tasks";
+import { z } from "zod";
+
+/** The email a task came from (email trigger), so the answer is drafted as a reply in its thread. */
+export const EmailSource = z.object({
+  threadId: z.string().max(64),
+  messageId: z.string().max(300),
+  subject: z.string().max(300),
+  fromName: z.string().max(120),
+});
+export type EmailSource = z.infer<typeof EmailSource>;
+
+export const reSubject = (subject: string) => (/^re:/i.test(subject.trim()) ? subject.trim() : `Re: ${subject.trim()}`);
 
 export interface DraftEmail {
   to: string | null;

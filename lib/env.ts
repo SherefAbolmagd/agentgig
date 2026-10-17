@@ -12,6 +12,8 @@ const ServerEnvSchema = z.object({
   KNOWLEDGE_BUCKET: z.string().optional(),
   /** Bucket for the invoice inbox; uploads there trigger ReceiptHero via Pub/Sub. */
   INBOX_BUCKET: z.string().optional(),
+  /** Pub/Sub topic Gmail publishes inbox changes to; defaults to projects/{project}/topics/gmail-events. */
+  GMAIL_TOPIC: z.string().optional(),
   /**
    * Public URL of this service. When set, triggered work goes through Cloud
    * Tasks and internal calls must carry a Google OIDC token for

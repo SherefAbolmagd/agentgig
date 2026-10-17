@@ -1,5 +1,5 @@
 import "server-only";
-import { calendarEvents, gmailCreateDraft, googleSelf, type CalendarEvent } from "./google";
+import { calendarEvents, gmailCreateDraft, googleSelf, type CalendarEvent, type GmailReplyTo } from "./google";
 import { microsoftSelf, outlookCreateDraft, outlookEvents } from "./microsoft";
 
 /**
@@ -10,10 +10,10 @@ import { microsoftSelf, outlookCreateDraft, outlookEvents } from "./microsoft";
 export const EMAIL_TOOLS = "Google or Microsoft 365";
 
 /** Saves a draft (never sends) in Gmail or Outlook. Null if neither is connected. */
-export async function createEmailDraft(userId: string, mail: { to?: string | null; subject: string; body: string }): Promise<{ draftId: string; url: string; app: "Gmail" | "Outlook" } | null> {
+export async function createEmailDraft(userId: string, mail: { to?: string | null; subject: string; body: string; replyTo?: GmailReplyTo | null }): Promise<{ draftId: string; url: string; app: "Gmail" | "Outlook" } | null> {
   const gmail = await gmailCreateDraft(userId, mail);
   if (gmail) return { ...gmail, app: "Gmail" };
-  const outlook = await outlookCreateDraft(userId, mail);
+  const outlook = await outlookCreateDraft(userId, { to: mail.to, subject: mail.subject, body: mail.body });
   return outlook ? { ...outlook, app: "Outlook" } : null;
 }
 

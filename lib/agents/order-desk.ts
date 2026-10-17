@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { notDelivered, slackPost, type Delivery } from "@/lib/connectors";
+import { gmailCreateDraft, notDelivered, slackPost, type Delivery } from "@/lib/connectors";
+import { EmailSource, reSubject } from "./drafts";
 import { storeFindOrders } from "@/lib/connectors/store";
 import { GatewayError } from "@/lib/errors";
 import { generateJson, textPart } from "@/lib/vertex";
@@ -13,6 +14,8 @@ export const OrderDeskInput = z.object({
   /** Used only to look the order up; never sent to the model. */
   customerEmail: z.email().optional(),
   slack: z.object({ channel: z.string(), ts: z.string() }).optional(),
+  /** Set when the question arrived by email: the reply is drafted in that thread. */
+  email: EmailSource.optional(),
 });
 export type OrderDeskInput = z.infer<typeof OrderDeskInput>;
 
@@ -22,7 +25,12 @@ const ModelOutput = z.object({
   reason: z.string(),
 });
 
-export type OrderDeskOutput = z.infer<typeof ModelOutput> & { found: number; orderSummary: string | null; slack?: { channel: string; ts: string } };
+export type OrderDeskOutput = z.infer<typeof ModelOutput> & {
+  found: number;
+  orderSummary: string | null;
+  slack?: { channel: string; ts: string };
+  email?: EmailSource & { to: string };
+};
 
 export const orderDesk = defineAgent<OrderDeskInput, OrderDeskOutput>({
   slug: "order-desk",
@@ -57,14 +65,14 @@ export const orderDesk = defineAgent<OrderDeskInput, OrderDeskOutput>({
     });
     return {
       ...res,
-      output: { ...res.data, found: lookup.orders.length, orderSummary: o ? facts : null, ...(input.slack && { slack: input.slack }) },
+      output: { ...res.data, found: lookup.orders.length, orderSummary: o ? facts : null, ...(input.slack && { slack: input.slack }), ...(input.email && input.customerEmail && { email: { ...input.email, to: input.customerEmail } }) },
       notes: [o ? `Found order ${o.number} in ${lookup.source}` : `No matching order in ${lookup.source}`],
     };
   },
 
   approval(o) {
     return {
-      title: o.needsHuman ? "An order question needs you" : "Order reply ready",
+      title: o.needsHuman ? `${o.email ? `${o.email.fromName} emailed: ` : ""}an order question needs you` : o.email ? `${o.email.fromName} emailed about an order. Reply ready` : "Order reply ready",
       preview: o.needsHuman ? o.reason : `“${o.reply.slice(0, 140)}”`,
       severity: o.needsHuman ? "check" : "info",
       actions: [
@@ -79,6 +87,10 @@ export const orderDesk = defineAgent<OrderDeskInput, OrderDeskOutput>({
     if (o.slack) {
       const posted = await slackPost(userId, { channel: o.slack.channel, threadTs: o.slack.ts, text: o.reply });
       if (posted) return { delivered: true, summary: "Replied in the Slack thread", links: posted.url ? [{ label: "Open in Slack", url: posted.url }] : [] };
+    }
+    if (o.email) {
+      const draft = await gmailCreateDraft(userId, { to: o.email.to, subject: reSubject(o.email.subject), body: o.reply, replyTo: o.email });
+      if (draft) return { delivered: true, summary: "Reply saved as a draft in the email thread in Gmail. Nothing was sent.", links: [{ label: "Open draft", url: draft.url }] };
     }
     return notDelivered("Reply ready to send. Copy it from the result.");
   },

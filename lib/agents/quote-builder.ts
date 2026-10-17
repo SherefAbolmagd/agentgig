@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createEmailDraft, notDelivered, type Delivery } from "@/lib/connectors";
 import { generateJson, textPart } from "@/lib/vertex";
+import { EmailSource, reSubject } from "./drafts";
 import { defineAgent, documentParts, groundingPrompt } from "./types";
 
 /**
@@ -16,6 +17,8 @@ export const QuoteInput = z.object({
   vatRate: z.number().min(0).max(30).default(20),
   currency: z.string().trim().length(3).toUpperCase().default("GBP"),
   validDays: z.number().int().min(1).max(120).default(30),
+  /** Set when the enquiry arrived by email: the quote is drafted as a reply in that thread. */
+  email: EmailSource.optional(),
 });
 export type QuoteInput = z.infer<typeof QuoteInput>;
 
@@ -67,6 +70,7 @@ export type QuoteOutput = {
   assumptions: string[];
   questions: string[];
   estimatedLines: number;
+  email?: EmailSource;
 };
 
 export function quoteText(q: QuoteOutput, businessName: string): string {
@@ -131,13 +135,14 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
       assumptions: res.data.assumptions,
       questions: res.data.questions,
       estimatedLines: lines.filter((l) => !l.fromPriceList).length,
+      ...(input.email && { email: input.email }),
     };
     return { ...res, output, notes: [`${lines.length} lines, ${output.estimatedLines} estimated (not on your price list)`] };
   },
 
   approval(o) {
     return {
-      title: `Quote ${o.reference} ready: ${o.currency} ${o.total.toFixed(2)} inc. VAT`,
+      title: `${o.email ? `${o.email.fromName} emailed for a quote. ` : ""}Quote ${o.reference} ready: ${o.currency} ${o.total.toFixed(2)} inc. VAT`,
       preview: [
         ...o.lines.map((l) => `${l.quantity} × ${l.description}: ${o.currency} ${l.amount.toFixed(2)}${l.fromPriceList ? "" : " (estimated)"}`),
         `VAT ${o.vatRate}%: ${o.currency} ${o.vat.toFixed(2)}`,
@@ -157,7 +162,12 @@ export const quoteBuilder = defineAgent<QuoteInput, QuoteOutput>({
   async deliver(o, { userId }): Promise<Delivery> {
     const { db } = await import("@/lib/firebase-admin");
     const user = (await db().collection("users").doc(userId).get()).data() as { businessName?: string } | undefined;
-    const draft = await createEmailDraft(userId, { to: o.customerEmail, subject: `Your quote ${o.reference}`, body: quoteText(o, user?.businessName ?? "") });
+    const draft = await createEmailDraft(userId, {
+      to: o.customerEmail,
+      subject: o.email ? reSubject(o.email.subject) : `Your quote ${o.reference}`,
+      body: quoteText(o, user?.businessName ?? ""),
+      replyTo: o.email,
+    });
     if (!draft) return notDelivered("Quote ready. Connect Google or Microsoft 365 to save it as an email draft, or copy it from the result.");
     return { delivered: true, summary: `Quote saved as a draft in ${draft.app}. Nothing was sent.`, links: [{ label: "Open draft", url: draft.url }] };
   },
