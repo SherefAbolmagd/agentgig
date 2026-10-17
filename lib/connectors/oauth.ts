@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { GatewayError } from "@/lib/errors";
 import { db } from "@/lib/firebase-admin";
 import { putSecret } from "@/lib/secrets";
-import { COLLECTIONS } from "@/types/firestore";
+import { COLLECTIONS, type ConnectionDoc } from "@/types/firestore";
 import type { OAuthProvider as Provider } from "@/lib/integrations";
 
 /**
@@ -276,9 +276,12 @@ export async function finishConnect(provider: Provider, code: string, state: str
   const { tokens, label, meta, scopes } = await describe(provider, json, extra);
   if (provider === "zoho") tokens.token_url = tokenUrl;
   const secretRef = await putSecret(`conn-${provider}-${saved.userId}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 255), JSON.stringify(tokens));
-  await db()
-    .collection(COLLECTIONS.connections)
-    .doc(`${saved.userId}_${provider}`)
+  const ref = db().collection(COLLECTIONS.connections).doc(`${saved.userId}_${provider}`);
+  // Reconnecting the same account (e.g. to grant a new permission) keeps what was set up
+  // on it, like the spend sheet and Drive folder; a different account starts afresh.
+  const before = (await ref.get()).data() as ConnectionDoc | undefined;
+  const keptMeta = before?.accountLabel === label ? (before.meta ?? {}) : {};
+  await ref
     .set(
       {
         userId: saved.userId,
@@ -287,7 +290,7 @@ export async function finishConnect(provider: Provider, code: string, state: str
         scopes,
         secretRef,
         status: "active",
-        meta,
+        meta: { ...keptMeta, ...meta },
         createdAt: FieldValue.serverTimestamp(),
         ...(tokens.expires_at && { expiresAt: Timestamp.fromMillis(tokens.expires_at) }),
       },

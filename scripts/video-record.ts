@@ -10,7 +10,8 @@
  * Before a take: Shopify connected and seeded (video-connect-shopify.ts, run
  * again within 24 h; video-seed-shopify.ts), Stripe connected (Revenue Pulse;
  * skipped when it isn't), Google connected and signed in on the Edge profile
- * (video-google-login.ts), Telegram linked, and the LabelWise partner running.
+ * (video-google-login.ts) with Gmail access for the email trigger, Telegram
+ * linked, and the LabelWise partner running.
  * Earlier takes (Café Lumen) are in git history.
  */
 import { readFileSync } from "node:fs";
@@ -38,11 +39,36 @@ async function main() {
   const runButton = () => p.getByRole("button", { name: /Run now · \d+ tokens/ });
   const resultPanel = () => p.getByRole("heading", { name: "Result" }).locator("xpath=ancestor::section[1]");
   const gmailDrafts = "https://mail.google.com/mail/u/0/#drafts";
+  const gmailInbox = "https://mail.google.com/mail/u/0/#inbox";
+
+  /** A customer's email lands in the store's Gmail inbox (Gmail's insert, as if delivered). AgentGig's Gmail push does the rest. */
+  async function arrive(fromName: string, fromEmail: string, subject: string, body: string) {
+    const token = await accessToken((await getConnection(UID, "google"))!);
+    const raw = [
+      `From: ${fromName} <${fromEmail}>`,
+      `Subject: ${subject}`,
+      `Date: ${new Date().toUTCString()}`,
+      `Message-ID: <${Date.now()}.${Math.random().toString(36).slice(2)}@${fromEmail.split("@")[1]}>`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
+      "",
+      body,
+    ].join("\r\n");
+    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?internalDateSource=dateHeader", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ raw: Buffer.from(raw).toString("base64url"), labelIds: ["INBOX", "UNREAD"] }),
+    });
+    if (!res.ok) throw new Error(`Gmail insert failed: ${res.status} ${await res.text()}`);
+  }
 
   await stage.run(async () => {
-    /* 1 · Cold open: "where's my order?", answered from the phone */
+    /* 1 · Cold open: a customer emails "where's my order?"; Order Desk picks it up */
     mark("cold");
-    const reply = await tg.ask(`Can you answer this? ${readFileSync(`${FIX}/order-question.txt`, "utf8")}`, /Order reply ready|reply ready/i, { paste: true });
+    await arrive("Sophie Turner", "sophie.turner@example.com", "Where is my order #1010?", readFileSync(`${FIX}/order-question.txt`, "utf8"));
+    await web.glance(gmailInbox, (g) => g.getByText("Where is my order #1010?").filter({ visible: true }).first(), 2500);
+    mark("cold email");
+    const reply = await tg.waitFor(/emailed about an order/);
     mark("cold draft");
     await tg.me.point(reply);
     await tg.me.pause(2200);
@@ -113,16 +139,20 @@ async function main() {
     await tg.waitFor(/Approved/, 2);
     mark("winback approved");
 
-    /* 8 · A wholesale enquiry becomes a quote */
+    /* 8 · A wholesale enquiry arrives by email and becomes a quote */
     mark("scene 8 quote");
-    const quote = await tg.ask(`Can you quote this? ${readFileSync(`${FIX}/wholesale-enquiry.txt`, "utf8")}`, /Quote Q-/, { paste: true });
+    await arrive("Hannah Price", "hannah@hearthandhome.example", "Wholesale: 40 Autumn gift sets", readFileSync(`${FIX}/wholesale-enquiry.txt`, "utf8"));
+    await web.glance(gmailInbox, (g) => g.getByText("Wholesale: 40 Autumn gift sets").filter({ visible: true }).first(), 2500);
+    mark("quote email");
+    const quote = await tg.waitFor(/emailed for a quote/);
     mark("quote posted");
     await tg.me.point(quote);
     await tg.me.pause(2200);
     await tg.tap(quote, "Approve");
     await tg.waitFor(/draft in Gmail/);
     mark("quote approved");
-    await web.glance(gmailDrafts, (g) => g.getByText(/Your quote Q-/).filter({ visible: true }).first(), 2500);
+    // The quote waits as a draft reply in Hannah's email thread.
+    await web.glance(gmailDrafts, (g) => g.getByText(/Wholesale: 40 Autumn gift sets/).filter({ visible: true }).first(), 2500);
 
     /* 9 · A supplier invoice lands in Google Drive */
     mark("scene 9 drive");

@@ -126,6 +126,13 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   // Delete the Gmail drafts earlier takes left, so the take's drafts are the only ones on
   // screen: everything drafted since the agents started here. The owner's older drafts stay.
   if (conn) await deleteAgentDrafts(await accessToken(conn));
+  // The customers' emails earlier takes delivered to the inbox go to the bin.
+  if (conn) {
+    const auth = { authorization: `Bearer ${await accessToken(conn)}` };
+    const q = encodeURIComponent("from:(sophie.turner@example.com OR hannah@hearthandhome.example)");
+    const found = (await (await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=100`, { headers: auth })).json()) as { messages?: { id: string }[] };
+    for (const m of found.messages ?? []) await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/trash`, { method: "POST", headers: auth });
+  }
   // The spend sheet AgentGig made: clear earlier takes' rows, keep the header.
   const sheetId = conn?.meta?.spendSheetId as string | undefined;
   if (conn && sheetId) {
