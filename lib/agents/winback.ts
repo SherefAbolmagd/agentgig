@@ -53,7 +53,7 @@ export const winback = defineAgent<WinbackInput, WinbackOutput>({
     const res = await generateJson({
       tier: "flash",
       system:
-        "Write short, warm win-back emails from a small business to past customers, one per customer. Mention their history naturally (not the exact amount spent). Include the offer if one is given; never invent one. Sign off with the business name. 80–120 words each.",
+        "Write short, warm win-back emails from a small business to past customers, one per customer. These customers have NOT ordered since their last order date, which is well before today: acknowledge it's been a while (e.g. \"since the summer\"), and never suggest a recent or new order. Mention their history naturally (not the exact amount spent). Include the offer if one is given; never invent one. Sign off with the business name. 80–120 words each.",
       parts: [
         textPart(
           `${groundingPrompt(grounding)}\n${input.offer ? `Offer: ${input.offer}\n` : ""}\nCustomers:\n${summary
