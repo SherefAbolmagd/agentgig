@@ -99,7 +99,7 @@ export async function onGmailPush(emailAddress: string, historyId: string): Prom
       } catch {
         continue;
       }
-      await enqueue({ key: `gmail-${userId}-${id}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100), userId, agentId: "", input: {}, origin: "event", gmailMessageId: id });
+      await enqueue({ key: `gmail-${userId}-${id}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100), userId, agentId: "email", input: {}, origin: "event", gmailMessageId: id });
       queued++;
     }
     await doc.ref.update({ "meta.gmailWatch.historyId": since.historyId });

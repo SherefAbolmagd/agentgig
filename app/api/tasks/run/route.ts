@@ -18,6 +18,7 @@ const Job = z.object({
   publishTaskId: z.string().optional(),
   rememberTaskId: z.string().optional(),
   syncMemory: z.literal(true).optional(),
+  gmailMessageId: z.string().regex(/^[A-Za-z0-9]{1,64}$/).optional(),
   telegram: z
     .object({
       updateId: z.number().int(),
