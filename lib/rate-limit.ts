@@ -32,10 +32,6 @@ export const LIMITS = {
   telegramStranger: { limit: 5, windowSec: 3600 },
   /** Telegram link codes per person. */
   telegramLinkCodes: { limit: 10, windowSec: 3600 },
-  /** Reviews from one network, across all review pages. */
-  reviewsPerIp: { limit: 5, windowSec: 3600 },
-  /** Reviews on one business's page (each one can start a paid agent task). */
-  reviewsPerPage: { limit: 30, windowSec: 86_400 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -50,8 +46,6 @@ const MESSAGES: Record<LimitName, string> = {
   telegramPerUser: "You're sending messages faster than your team can keep up. Give it a few minutes.",
   telegramStranger: "Too many messages.",
   telegramLinkCodes: "Too many Telegram links created. Try again in an hour.",
-  reviewsPerIp: "Thanks! You've left several reviews already. Try again later.",
-  reviewsPerPage: "This business has had a lot of reviews today. Try again tomorrow.",
 };
 
 /** Counts one use of `name` for `subject`; throws RATE_LIMITED when over the limit. */
