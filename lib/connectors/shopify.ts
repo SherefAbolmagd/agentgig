@@ -84,7 +84,7 @@ export async function shopifyFindOrders(userId: string, q: { orderNumber?: strin
     orders: {
       nodes: {
         name: string;
-        createdAt: string;
+        processedAt: string;
         displayFinancialStatus: string;
         displayFulfillmentStatus: string;
         totalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
@@ -96,7 +96,7 @@ export async function shopifyFindOrders(userId: string, q: { orderNumber?: strin
     c.shop,
     c.token,
     `query($q: String!) { orders(first: 5, query: $q, sortKey: CREATED_AT, reverse: true) { nodes {
-      name createdAt displayFinancialStatus displayFulfillmentStatus
+      name processedAt displayFinancialStatus displayFulfillmentStatus
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 20) { nodes { name quantity } }
       fulfillments { trackingInfo { company number url } } } } }`,
@@ -104,7 +104,8 @@ export async function shopifyFindOrders(userId: string, q: { orderNumber?: strin
   );
   return data.orders.nodes.map((o) => ({
     number: o.name,
-    createdAt: o.createdAt,
+    // When the order was placed (createdAt is when Shopify stored it, later for imported orders).
+    createdAt: o.processedAt,
     paymentStatus: o.displayFinancialStatus.toLowerCase(),
     fulfilmentStatus: o.displayFulfillmentStatus.toLowerCase(),
     total: Number(o.totalPriceSet.shopMoney.amount),
