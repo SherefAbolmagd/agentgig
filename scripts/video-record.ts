@@ -122,7 +122,7 @@ async function main() {
     await tg.tap(quote, "Approve");
     await tg.waitFor(/draft in Gmail/);
     mark("quote approved");
-    await web.glance(gmailDrafts, (g) => g.getByText(/Your quote Q-/).first(), 2500);
+    await web.glance(gmailDrafts, (g) => g.getByText(/Your quote Q-/).filter({ visible: true }).first(), 2500);
 
     /* 9 · A supplier invoice lands in Google Drive */
     mark("scene 9 drive");
@@ -141,7 +141,7 @@ async function main() {
     });
     if (!upload.ok) throw new Error(`Drive upload failed: ${upload.status}`);
     mark("drive upload");
-    if (folder) await web.glance(`https://drive.google.com/drive/folders/${folder.folderId}`, (g) => g.getByText("invoice-NW-3317.pdf").first(), 2500);
+    if (folder) await web.glance(`https://drive.google.com/drive/folders/${folder.folderId}`, (g) => g.getByText("invoice-NW-3317.pdf").filter({ visible: true }).first(), 2500);
     // Drive is checked every 5 minutes; the edit skips ahead to the check.
     await queueDriveInvoices();
     mark("drive checked");
@@ -152,7 +152,7 @@ async function main() {
     await tg.waitFor(/drafted a correction email/);
     mark("invoice approved");
     const sheet = (await getConnection(UID, "google"))?.meta?.spendSheetId as string | undefined;
-    if (sheet) await web.glance(`https://docs.google.com/spreadsheets/d/${sheet}`, (g) => g.getByText(/NW-3317|Northern Wax/).first(), 2500);
+    if (sheet) await web.glance(`https://docs.google.com/spreadsheets/d/${sheet}`, (g) => g.getByText(/NW-3317|Northern Wax/).filter({ visible: true }).first(), 2500);
 
     /* 10 · Memory: a fact waits for Sam's OK, then Ada uses it */
     mark("scene 10 memory");

@@ -27,7 +27,7 @@ const STORE = {
   businessName: "Willow & Wick",
   displayName: "Sam Patel",
   profile: {
-    description: "Online store selling hand-poured soy candles, wax melts and gift sets, made in a small studio in Leeds and shipped across the UK. We also supply a few homeware shops wholesale.",
+    description: "Online store selling soy candles, wax melts and gift sets. We design the scents in Leeds; our partner chandlery Calder Candle Co. pours them. We ship across the UK and supply a few homeware shops wholesale.",
     products: "Candles 300g £22–£26 (Fig & Cedar is the best seller), wax melts £9.50, Autumn gift set £48, long matches £4. Wholesale prices in our price list.",
     audience: "People buying candles for their home or as gifts, and independent homeware shops",
     toneOfVoice: "Warm, calm and personal, like a friend recommending a candle; never pushy",
@@ -49,7 +49,7 @@ const TEAM: { agentId: string; triggerId: string; approvalMode: "ask" | "auto"; 
 
 /** What the team already knows about the store; the Customers fact waits for Sam's OK. */
 const FACTS: { shelf: "customers" | "money" | "stock" | "brand" | "team"; fact: string; pending?: true }[] = [
-  { shelf: "stock", fact: "Fig & Cedar is the best seller; reorder from Northern Wax Co. when fewer than 10 are left." },
+  { shelf: "stock", fact: "Fig & Cedar is the best seller; reorder from Calder Candle Co. when fewer than 10 are left." },
   { shelf: "money", fact: "Northern Wax Co. invoices are due 30 days after delivery." },
   { shelf: "brand", fact: "Customer emails are signed \"Sam at Willow & Wick\" and never use exclamation marks more than once." },
   { shelf: "team", fact: "Priya packs and ships orders Monday to Thursday; Leo answers customer emails." },

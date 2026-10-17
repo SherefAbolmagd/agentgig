@@ -80,7 +80,7 @@ async function main() {
       {
         input: {
           title: p.title,
-          vendor: "Willow & Wick",
+          vendor: p.sku === "WW-MATCH" ? "Hearthside Matches" : "Calder Candle Co.",
           status: "ACTIVE",
           productOptions: [{ name: "Title", values: [{ name: "Default Title" }] }],
           variants: [
