@@ -5,7 +5,7 @@
   "05": "Sam just asks. Revenue Pulse reads Stripe: this week's takings, and a card that was declined.",
   "06": "Need something new? Hire it. Win-back works in Sam's Shopify store, asks before it emails anyone, and has a monthly spending cap.",
   "07": "It finds four customers who haven't ordered since the summer and writes each one a personal email, only to people who agreed to hear from the shop.",
-  "08": "A homeware shop wants forty gift sets. Quote Builder prices every line from Sam's wholesale list, volume discounts included, and saves the quote as a Gmail draft.",
+  "08": "A homeware shop emails for forty gift sets. Quote Builder picks it up from the inbox, prices every line from Sam's wholesale list, and drafts the reply in the same email thread.",
   "09": "A supplier invoice lands in Google Drive. ReceiptHero picks it up on its own, Gemini reads it, code checks every sum, and a twenty-two pound overcharge is caught and logged to the spend sheet.",
   "10": "Agents learn as they work, and they write down what they learn. Facts about customers and money wait for Sam's OK, and once approved, every agent knows them.",
   "11": "Sam invites Priya as a manager. Priya can approve drafts too, but only Sam can buy tokens.",

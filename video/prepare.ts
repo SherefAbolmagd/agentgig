@@ -178,8 +178,8 @@ const captions = voice.flatMap(({ key, start, dur }) => {
 
 const callout = (outT: number | null, text: string, sub?: string) => (outT === null ? [] : [{ start: outT, end: outT + 3.4, text, sub }]);
 const callouts = [
-  ...callout(toOutAll(at("cold") + 1)[0] ?? null, "A customer asks: where's my order?", "Sam forwards it to Ada on Telegram"),
-  ...callout(toOutAll(at("cold draft"))[0] ?? null, "Found in Shopify, reply drafted", "Shipped · Royal Mail tracking included"),
+  ...callout(toOutAll(at("cold") + 1)[0] ?? null, "A customer emails: where's my order?", "It lands in Gmail. Nobody forwards it"),
+  ...callout(toOutAll(at("cold draft"))[0] ?? null, "Order Desk picked it up by itself", "Found in Shopify · reply drafted in the thread"),
   ...callout(sceneStart("03") + 1.5, "One team for the whole shop", "Orders · stock · money · customers"),
   ...callout(sceneStart("04") + 1.2, "Runs by itself every morning", "Started by hand for the demo"),
   ...callout(toOut(at("stock ready")), "Two products running low", "Reorder email drafted"),
@@ -187,6 +187,7 @@ const callouts = [
   ...(has("revenue posted") ? callout(toOut(at("revenue posted")), "This week's takings from Stripe", "And one declined card") : []),
   ...callout(sceneStart("06") + 1.5, "Hired in seconds", "Works in Sam's Shopify · 30-token monthly cap"),
   ...callout(toOut(at("winback ready")), "4 customers to win back", "Only those who opted in to emails"),
+  ...callout(toOut(at("quote email")), "A wholesale enquiry by email", "Quote Builder picks it up from the inbox"),
   ...callout(toOut(at("quote posted")), "Priced from Sam's own list", "Volume discounts applied"),
   ...callout(toOut(at("drive upload")), "Lands in Google Drive", "The folder is checked every 5 minutes"),
   ...callout(toOut(at("invoice draft")), "£22.00 overcharge caught", "Gemini reads it · code checks the sums"),
