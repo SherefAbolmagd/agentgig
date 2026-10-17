@@ -14,7 +14,7 @@ const mono = loadMono("normal", { weights: ["400", "500"], subsets: ["latin"] })
 const C = { bg: "#0b110f", card: "#151d1a", line: "#24302b", fg: "#e6eeea", muted: "#93a49c", green: "#3cc79f", spark: "#e7b451" };
 
 type Piece = { from: number; to: number; speed: number; hold?: number; still?: number; outStart: number; outDur: number };
-type Seg = { kind: string; key?: string; start: number; dur: number; pieces?: Piece[] };
+type Seg = { kind: string; key?: string; start: number; dur: number; pieces?: Piece[]; index?: number };
 type Ev = { t: number; page: "web" | "tg"; kind: "move" | "click" | "message"; x: number; y: number; w?: number; h?: number };
 const T = timeline as unknown as {
   total: number;
@@ -22,6 +22,7 @@ const T = timeline as unknown as {
   costTokens: number;
   pages: { web: { w: number; h: number }; tg: { w: number; h: number } };
   segments: Seg[];
+  camera: Record<string, View[]>;
   voice: { key: string; start: number; dur: number }[];
   captions: { start: number; end: number; text: string }[];
   callouts: { start: number; end: number; text: string; sub?: string }[];
@@ -38,56 +39,19 @@ const WEB = { x: 56, y: 108, s: 0.86, bar: 38 };
 const PHONE = { x: 1222, y: 112, s: 0.84, bezel: 14 };
 const webSize = { w: T.pages.web.w * WEB.s, h: T.pages.web.h * WEB.s };
 const tgSize = { w: T.pages.tg.w * PHONE.s, h: T.pages.tg.h * PHONE.s };
-/** A point in a page, in canvas pixels. */
-const toCanvas = (page: "web" | "tg", x: number, y: number) =>
-  page === "web" ? { x: WEB.x + x * WEB.s, y: WEB.y + y * WEB.s } : { x: PHONE.x + PHONE.bezel + x * PHONE.s, y: PHONE.y + PHONE.bezel + y * PHONE.s };
 
-/** Where in the take a moment of the video comes from (scenes only). */
-function sourceAt(t: number): number | null {
-  for (const s of T.segments) {
-    if (s.kind !== "scene" || !s.pieces) continue;
-    for (const p of s.pieces) if (t >= p.outStart && t < p.outStart + p.outDur) return p.hold ? p.to : p.from + (t - p.outStart) * p.speed;
-  }
-  return null;
-}
+type View = { t: number; cx: number; cy: number; w: number };
+const EASE = Easing.bezier(0.65, 0, 0.35, 1);
 
-type Cam = { z: number; x: number; y: number };
-const OVERVIEW: Cam = { z: 1, x: 960, y: 540 };
-
-/** Where the camera wants to be: on the latest action still in play, else the whole stage. */
-function shot(t: number): Cam {
-  const src = sourceAt(t);
-  if (src === null) return OVERVIEW;
-  let best: { start: number; cam: Cam } | null = null;
-  for (const e of T.events) {
-    const [before, after, z] =
-      e.kind === "message" ? [0.2, 3.2, 1.7] : e.kind === "click" ? (e.page === "tg" ? [0.9, 1.3, 1.7] : [0.9, 1.6, 1.45]) : e.page === "web" ? [0.3, 1.2, 1.22] : [0, 0, 0];
-    if (!z || src < e.t - before || src > e.t + after) continue;
-    const p = toCanvas(e.page, e.x + (e.w ?? 0) / 2, e.y + (e.h ?? 0) / 2);
-    if (!best || e.t - before > best.start) best = { start: e.t - before, cam: { z, x: p.x, y: p.y } };
-  }
-  return best?.cam ?? OVERVIEW;
-}
-
-/** The camera eases towards each shot: a weighted look back over the last 0.7 s. */
-function camera(t: number): Cam {
-  let w = 0;
-  const acc = { z: 0, x: 0, y: 0 };
-  for (let k = 0; k <= 28; k++) {
-    const weight = 1 - k / 29;
-    const c = shot(t - k * 0.025);
-    acc.z += c.z * weight;
-    acc.x += c.x * weight;
-    acc.y += c.y * weight;
-    w += weight;
-  }
-  const z = acc.z / w;
-  // Keep the view on the window and the phone, not the empty stage around them.
-  const box = { left: 30, top: 50, right: 1890, bottom: 975 };
-  const hw = 960 / z;
-  const hh = 540 / z;
-  const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(Math.max(v, lo), hi));
-  return { z, x: clamp(acc.x / w, box.left + hw, box.right - hw), y: clamp(acc.y / w, box.top + hh, box.bottom - hh) };
+/** The camera at a moment of a scene: planned shots (video/prepare.ts) joined by eased moves of the view. */
+function camera(keys: View[], t: number): { z: number; x: number; y: number } {
+  let i = 0;
+  while (i < keys.length - 1 && keys[i + 1].t <= t) i++;
+  const a = keys[i];
+  const b = keys[Math.min(i + 1, keys.length - 1)];
+  const p = b.t > a.t ? EASE(Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t)))) : 1;
+  const w = a.w + (b.w - a.w) * p;
+  return { z: 1920 / w, x: a.cx + (b.cx - a.cx) * p, y: a.cy + (b.cy - a.cy) * p };
 }
 
 function Pieces({ pieces, page }: { pieces: Piece[]; page: "web" | "tg" }) {
@@ -134,7 +98,7 @@ function Phone({ children, x = PHONE.x, y = PHONE.y, s = PHONE.s }: { children: 
 function Stage({ seg }: { seg: Seg }) {
   const frame = useCurrentFrame();
   const t = seg.start + frame / FPS;
-  const cam = camera(t);
+  const cam = camera(T.camera[String(seg.index)] ?? [{ t: 0, cx: 960, cy: 540, w: 1920 }], frame / FPS);
   const sped = seg.pieces!.some((p) => p.speed > 1 && t >= p.outStart && t < p.outStart + p.outDur);
   return (
     <AbsoluteFill>
@@ -420,7 +384,7 @@ export const Demo = () => (
       <Sequence key={i} from={f(s.start)} durationInFrames={Math.max(1, f(s.dur))}>
         {s.kind === "cold" && <ColdOpen seg={s} />}
         {s.kind === "title" && <Title />}
-        {s.kind === "scene" && <Stage seg={s} />}
+        {s.kind === "scene" && <Stage seg={{ ...s, index: i }} />}
         {s.kind === "arch" && <Architecture seg={s} />}
         {s.kind === "stats" && <Stats />}
         {s.kind === "end" && <End />}

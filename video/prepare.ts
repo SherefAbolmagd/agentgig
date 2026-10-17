@@ -188,6 +188,84 @@ const callouts = [
   ...callout(toOut(message(/tokens/)), "Charged only for finished work", "Failed tasks are free"),
 ];
 
+/* ------------------------------------------------------------------ */
+/* Camera: planned shots, like an editor would cut a screen recording  */
+/* ------------------------------------------------------------------ */
+
+// Stage layout, shared with src/Demo.tsx (the website window and the phone).
+const STAGE = { web: { x: 56, y: 108, s: 0.86 }, tg: { x: 1222 + 14, y: 112 + 14, s: 0.84 }, box: { left: 30, top: 50, right: 1890, bottom: 975 } };
+type Rect = { x: number; y: number; w: number; h: number };
+type View = { t: number; cx: number; cy: number; w: number };
+const OVERVIEW = { cx: 960, cy: 540, w: 1920 };
+
+/** Where something in a page sits on the stage, in pixels. */
+function toStage(e: Ev): Rect {
+  const st = STAGE[e.page];
+  if (e.w && e.h) return { x: st.x + e.x * st.s, y: st.y + e.y * st.s, w: e.w * st.s, h: e.h * st.s };
+  // A click: frame the area around it.
+  const w = e.page === "web" ? 520 : 380;
+  const h = e.page === "web" ? 300 : 240;
+  return { x: st.x + e.x * st.s - w / 2, y: st.y + e.y * st.s - h / 2, w, h };
+}
+const union = (a: Rect, b: Rect): Rect => {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+};
+/** Steady zoom levels read as deliberate camera work; the phone's text is smaller, so it gets a closer shot. */
+const LEVEL = { web: 1.5, tg: 1.75 };
+
+/** The view (centre and width; 16:9) that frames a rectangle with some air, or null if a zoom isn't worth it. */
+function frame(r: Rect & { level?: number }): Omit<View, "t"> | null {
+  const z = Math.min(r.level ?? 1.5, 1920 / (r.w * 1.18), 1080 / (r.h * 1.3));
+  if (z < 1.25) return null;
+  const w = 1920 / z;
+  const h = w * (9 / 16);
+  const { box } = STAGE;
+  const clamp = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(Math.max(v, lo), hi));
+  return { cx: clamp(r.x + r.w / 2, box.left + w / 2, box.right - w / 2), cy: clamp(r.y + r.h / 2, box.top + h / 2, box.bottom - h / 2), w };
+}
+
+const MOVE = 0.9; // seconds per camera move
+const HOLD = 2.4; // how long a shot stays after its last moment
+const GROUP = 2.0; // moments closer than this share a shot
+const DIRECT = 3.0; // shots closer than this pan straight across instead of pulling out and back in
+const OPEN = 1.0; // every scene starts wide for at least this long
+
+/** Keyframes for one scene, in seconds from the scene's start. */
+function sceneCamera(seg: Extract<Segment, { kind: "cold" | "scene" }>): View[] {
+  const moments = events
+    .filter((e) => e.kind !== "move")
+    .flatMap((e) => toOutAll(e.t).filter((o) => o >= seg.start && o < seg.start + seg.dur).map((o) => ({ t: o - seg.start, rect: { ...toStage(e), level: LEVEL[e.page] } })))
+    .sort((a, b) => a.t - b.t);
+  const shots: { start: number; end: number; rect: Rect & { level: number } }[] = [];
+  for (const m of moments) {
+    const last = shots[shots.length - 1];
+    if (last && m.t - last.end + HOLD < GROUP && frame(union(last.rect, m.rect))) {
+      last.rect = { ...union(last.rect, m.rect), level: Math.min(last.rect.level, m.rect.level) };
+      last.end = m.t + HOLD;
+    } else shots.push({ start: m.t, end: m.t + HOLD, rect: m.rect });
+  }
+  const keys: View[] = [{ t: 0, ...OVERVIEW }];
+  let at = OVERVIEW as Omit<View, "t">;
+  for (let i = 0; i < shots.length; i++) {
+    const v = frame(shots[i].rect);
+    if (!v) continue;
+    const arrive = Math.max(shots[i].start - 0.15, keys[keys.length - 1].t + MOVE, OPEN + MOVE);
+    keys.push({ t: arrive - MOVE, ...at }, { t: arrive, ...v });
+    at = v;
+    const next = shots[i + 1];
+    const leave = Math.min(shots[i].end, seg.dur - MOVE);
+    // Pan straight to the next shot when it's close; otherwise ease back to the whole stage.
+    if (next && frame(next.rect) && next.start - shots[i].end < DIRECT) continue;
+    if (leave > arrive) keys.push({ t: leave, ...v }, { t: Math.min(leave + MOVE, seg.dur), ...OVERVIEW });
+    at = OVERVIEW;
+  }
+  // Drop keyframes that went backwards in time when shots crowd each other.
+  return keys.filter((k, i) => i === 0 || k.t > keys[i - 1].t - 1e-6).map((k) => ({ ...k, t: Math.max(0, Math.min(k.t, seg.dur)) }));
+}
+const camera = Object.fromEntries(segments.filter((s): s is Extract<Segment, { kind: "cold" | "scene" }> => s.kind === "scene").map((s) => [String(segments.indexOf(s)), sceneCamera(s)]));
+
 const sounds = [
   ...events.filter((e) => e.kind === "message").flatMap((e) => toOutAll(e.t).map((at) => ({ at, src: "ping" }))),
   ...events.filter((e) => e.kind === "click").flatMap((e) => toOutAll(e.t).map((at) => ({ at, src: "tap" }))),
@@ -196,6 +274,6 @@ const sounds = [
 
 writeFileSync(
   `${ROOT}/src/timeline.json`,
-  JSON.stringify({ total, waitSpeed, costTokens: Number(/(\d+) tokens/.exec(events.filter((e) => e.kind === "message").pop()?.text ?? "")?.[1] ?? 0), tasks: marks.filter((m) => /approved|posted|ready|answered/.test(m.label)).length, pages: { web: { w: even(webRect.w), h: even(webRect.h) }, tg: { w: even(tgRect.w), h: even(tgRect.h) } }, segments, voice, captions, callouts, sounds, events, musicSeconds: wavSeconds(`${ROOT}/public/audio/music.wav`) }, null, 1),
+  JSON.stringify({ total, waitSpeed, costTokens: Number(/(\d+) tokens/.exec(events.filter((e) => e.kind === "message").pop()?.text ?? "")?.[1] ?? 0), tasks: marks.filter((m) => /approved|posted|ready|answered/.test(m.label)).length, pages: { web: { w: even(webRect.w), h: even(webRect.h) }, tg: { w: even(tgRect.w), h: even(tgRect.h) } }, segments, camera, voice, captions, callouts, sounds, events, musicSeconds: wavSeconds(`${ROOT}/public/audio/music.wav`) }, null, 1),
 );
 console.log(`✓ timeline: ${total.toFixed(1)} s, waits ×${waitSpeed}, ${callouts.length} callouts, ${sounds.length} sounds`);
