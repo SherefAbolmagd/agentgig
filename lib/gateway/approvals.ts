@@ -78,7 +78,14 @@ export async function resolveApproval(userId: string, approvalId: string, decisi
   }
   if (decision.postNow && typeof output.scheduledFor === "string") output = { ...output, scheduledFor: new Date().toISOString() };
 
-  const delivery = await handler.deliver(output, { userId, taskId: approval.taskId });
+  let delivery;
+  try {
+    delivery = await handler.deliver(output, { userId, taskId: approval.taskId });
+  } catch (err) {
+    // Nothing was delivered: reopen the approval so the owner can fix the cause and approve again.
+    await approvalRef.update({ status: "open", resolvedAt: null });
+    throw err;
+  }
   await taskRef.update({ status: "delivered", output, delivery, updatedAt: FieldValue.serverTimestamp() });
   await log(`You approved${output.editedByOwner ? " your edited version" : ""} · ${delivery.summary}`);
   await queueRemember(userId, task.agentId, approval.taskId);

@@ -23,6 +23,9 @@ function client(key: string) {
 
 function stripeError(err: unknown): never {
   const e = err as { type?: string; statusCode?: number; message?: string };
+  if (/requires human approval/i.test(e.message ?? "")) {
+    throw new GatewayError("INVALID_INPUT", "Stripe is holding this for a second approval in your Stripe dashboard. Approve it there, or set the key's permission to plain Write so your tap here is enough.");
+  }
   if (e.type === "StripeAuthenticationError" || e.statusCode === 401) throw new GatewayError("INVALID_INPUT", "Stripe rejected that key. Check it was copied in full.");
   if (e.type === "StripePermissionError" || e.statusCode === 403) throw new GatewayError("INVALID_INPUT", `Stripe: the key is missing a permission. ${e.message ?? ""}`.trim());
   throw new GatewayError("AGENT_FAILED", `Stripe: ${e.message ?? "request failed"}`);
