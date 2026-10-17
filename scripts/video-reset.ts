@@ -96,6 +96,11 @@ async function resetStock() {
     if (body.errors?.length) throw new Error(`Shopify: ${body.errors[0].message}`);
     return body.data;
   };
+  // Orders earlier takes (and tests) placed on camera come out of the order list.
+  const { videoAddresses } = await import("./video-inbox");
+  const leah = (await videoAddresses()).leah;
+  const placed = (await gql<{ orders: { nodes: { id: string }[] } }>(`query($q: String!) { orders(first: 50, query: $q) { nodes { id } } }`, { q: `email:${leah} OR email:leah.test@example.com` })).orders.nodes;
+  for (const o of placed) await gql(`mutation($id: ID!) { orderDelete(orderId: $id) { deletedId userErrors { message } } }`, { id: o.id });
   const location = (await gql<{ locations: { nodes: { id: string }[] } }>(`{ locations(first: 1) { nodes { id } } }`)).locations.nodes[0].id;
   const variants = (await gql<{ productVariants: { nodes: { sku: string | null; inventoryItem: { id: string } }[] } }>(`{ productVariants(first: 50, query: "sku:WW-*") { nodes { sku inventoryItem { id } } } }`)).productVariants.nodes;
   const quantities = variants.filter((v) => v.sku && v.sku in STOCK).map((v) => ({ inventoryItemId: v.inventoryItem.id, locationId: location, quantity: STOCK[v.sku!] }));

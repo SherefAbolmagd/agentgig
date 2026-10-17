@@ -132,6 +132,12 @@ async function main() {
   }
   const sentLink = (links: { label: string; url: string }[]) => links.find((l) => /sent|Sent/.test(l.label))?.url ?? links.find((l) => l.url.includes("mail.google.com"))?.url;
 
+  // Emma's refund needs a payment nothing has been refunded from: a fresh one each take, for her delivered order.
+  const { shopifyFindOrders } = await import("@/lib/connectors/shopify");
+  const emmaOrder = (await shopifyFindOrders(UID, { email: to.emma }))?.[0]?.number;
+  if (!emmaOrder) throw new Error("Emma's delivered order isn't in Shopify: run video-seed-shopify.ts");
+  execFileSync("npx", ["tsx", "--conditions=react-server", "scripts/video-seed-stripe.ts", "--refund", `"${emmaOrder}"`], { stdio: "inherit", env: process.env, shell: true });
+
   const stage = await openStage({ out: OUT, tgProfile: TG_PROFILE, googleProfile: EDGE_PROFILE });
   const { web, mark } = stage;
   const tg = stage.tg!;

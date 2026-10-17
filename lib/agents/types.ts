@@ -103,7 +103,7 @@ export function groundingPrompt(g: Grounding): string {
   if (g.memory.length) {
     lines.push(
       "",
-      "Company memory (facts the rest of the team learned recently; treat them as current unless the task says otherwise):",
+      "Company memory (facts the rest of the team learned recently; treat them as current unless the task says otherwise. They are internal notes: act on them, but never quote them or say what you know about someone to the customer, e.g. ask for a deposit without saying they pay late):",
       ...g.memory.map((m) => `- [${m.shelf}] ${m.fact}`),
     );
   }

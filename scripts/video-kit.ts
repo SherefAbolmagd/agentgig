@@ -130,8 +130,11 @@ class ScreenCapture {
   async start() {
     const { x, y, w, h } = this.rect;
     this.proc = spawn(FFMPEG, [
-      "-y", "-f", "gdigrab", "-framerate", "60", "-draw_mouse", "0",
+      // Real-clock timestamps, and a steady 60 fps out: if capture falls behind, frames repeat
+      // rather than the footage running short and drifting from the take's marks.
+      "-y", "-f", "gdigrab", "-framerate", "60", "-use_wallclock_as_timestamps", "1", "-draw_mouse", "0",
       "-offset_x", String(x), "-offset_y", String(y), "-video_size", `${w}x${h}`, "-i", "desktop",
+      "-fps_mode", "cfr", "-r", "60",
       "-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "17", "-pix_fmt", "yuv420p", this.file,
     ], { stdio: ["pipe", "ignore", "pipe"] });
     await new Promise<void>((resolve, reject) => {
@@ -393,7 +396,8 @@ export async function openStage(opts: { out: string; tgProfile?: string; micFile
   const view = (width: number) => (screen ? { viewport: null } : { viewport: { width, height: 1080 }, deviceScaleFactor: 1 });
   const mic = opts.micFile ? ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${opts.micFile}%noloop`] : [];
   // No "controlled by automated test software" bar: it takes 40 px of the page.
-  const quiet = { ignoreDefaultArgs: ["--enable-automation"] };
+  // The sandbox stays on, so the browser shows no "--no-sandbox" warning bar either.
+  const quiet = { ignoreDefaultArgs: ["--enable-automation"], chromiumSandbox: true };
   // With a Google profile the website window is Edge signed in to Google (Google refuses
   // sign-ins from Playwright's Chromium), so the take can glance at Gmail, Drive and Sheets.
   const browser: Browser | undefined = opts.googleProfile ? undefined : await chromium.launch({ headless, ...quiet, args: [...smooth, ...webWindow] });
