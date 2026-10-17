@@ -212,7 +212,7 @@ const chips = [
 
 const callout = (outT: number | null, text: string, sub?: string) => (outT === null ? [] : [{ start: outT, end: outT + 3.4, text, sub }]);
 const callouts = [
-  ...callout(toOutAll(at("order ready"))[0] ?? null, "Nobody asked. The order did.", "Inventory Guardian picked it up by itself"),
+  ...callout(toOutAll(at("order ready"))[0] ?? null, "New Shopify order → Sam's phone in seconds", "No one typed a task"),
   ...callout(sceneStart("03") + 1.2, "What starts each agent", "Chosen when Sam hires it"),
   ...callout(toOut(at("tour memory")), "One memory for the whole team", "Customer and money facts need Sam's OK"),
   ...callout(toOut(at("tour marketplace")), "Hire more from the marketplace", "Paid per finished task"),
