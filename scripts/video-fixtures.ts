@@ -2,6 +2,7 @@
  * Files the demo video uses, written to fixtures/video/:
  *   invoice-INV-21407.pdf   a Lumen Supplies invoice whose printed total is £38.40 too high
  *   invoice-BD-5582.pdf     a correct Bridgewater Dairy invoice, dropped in with it
+ *   invoice-NW-3317.pdf     Willow & Wick's wax supplier, £22.00 too high (the store video)
  *   catering-price-list.md  uploaded to Company knowledge on camera; Quote Builder prices from it
  *   catering-enquiry.txt    the customer message forwarded to Ada on Telegram
  *   google-review.txt       the review handed to ReviewPulse
@@ -84,6 +85,41 @@ const cleanInvoice: PdfLine[] = [
   [50, 506, 9, "Thank you for your custom. Payment within 30 days to the account on your statement."],
 ];
 
+/** Willow & Wick's wax supplier; items + VAT come to £397.20, the invoice asks for £419.20. */
+const waxInvoice: PdfLine[] = [
+  [50, 790, 20, "Northern Wax Co.", true],
+  [50, 770, 10, "Unit 9, Calder Works, Hebden Bridge HX7 8AD"],
+  [50, 756, 10, "VAT Reg. No. GB 381 5520 94"],
+  [400, 790, 16, "INVOICE", true],
+  [400, 770, 10, "Invoice no: NW-3317"],
+  [400, 756, 10, "Date: 14/10/2026"],
+  [400, 742, 10, "Due: 13/11/2026"],
+  [50, 710, 10, "Bill to: Willow & Wick, Studio 4, Kirkstall Road, Leeds LS4 2AZ", true],
+  [50, 670, 10, "Description", true],
+  [300, 670, 10, "Qty", true],
+  [360, 670, 10, "Unit price", true],
+  [470, 670, 10, "Amount", true],
+  [50, 648, 10, "Soy container wax 20kg"],
+  [300, 648, 10, "3"],
+  [360, 648, 10, "GBP 46.00"],
+  [470, 648, 10, "GBP 138.00"],
+  [50, 630, 10, "Cotton wicks x500"],
+  [300, 630, 10, "2"],
+  [360, 630, 10, "GBP 18.50"],
+  [470, 630, 10, "GBP 37.00"],
+  [50, 612, 10, "Amber glass jars 30cl x48"],
+  [300, 612, 10, "4"],
+  [360, 612, 10, "GBP 39.00"],
+  [470, 612, 10, "GBP 156.00"],
+  [360, 576, 10, "Subtotal"],
+  [470, 576, 10, "GBP 331.00"],
+  [360, 560, 10, "VAT 20%"],
+  [470, 560, 10, "GBP 66.20"],
+  [360, 540, 12, "Total due", true],
+  [470, 540, 12, "GBP 419.20", true],
+  [50, 488, 9, "Payment by bank transfer within 30 days. Questions: accounts@northernwax.example"],
+];
+
 const priceList = `# Café Lumen: events and catering price list (2026)
 
 All prices exclude VAT at 20%. We deliver within Greater Manchester; delivery is free over £150.
@@ -123,6 +159,7 @@ export function writeVideoFixtures() {
   writeFileSync(`${DIR}/invoice-INV-21407.pdf`, buildPdf(invoice, "0.6 w 50 662 m 545 662 l S 360 534 m 545 534 l S"));
   writeFileSync(`${DIR}/invoice-BD-5582.pdf`, buildPdf(cleanInvoice, "0.6 w 50 662 m 545 662 l S 360 570 m 545 570 l S"));
   writeFileSync(`${DIR}/catering-price-list.md`, priceList);
+  writeFileSync(`${DIR}/invoice-NW-3317.pdf`, buildPdf(waxInvoice, "0.6 w 50 662 m 545 662 l S 360 552 m 545 552 l S"));
   writeFileSync(`${DIR}/catering-enquiry.txt`, enquiry);
   writeFileSync(`${DIR}/google-review.txt`, review);
   writeFileSync(`${DIR}/staff.csv`, staff);

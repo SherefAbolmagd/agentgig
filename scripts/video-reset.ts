@@ -4,7 +4,7 @@
  * video-cafe-lumen), never the judges' or anyone else's.
  *
  * Kept between takes: the sign-in, the Google connection and Sam's Telegram
- * link. Cleared: tasks, ledger, approvals, hires, memory, reviews, uploaded files,
+ * link. Cleared: tasks, ledger, approvals, hires, memory, uploaded files,
  * teammates, invites and the Telegram chat history.
  *
  *   npm run video:reset                       (the first run prints the password)
@@ -14,6 +14,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 export const VIDEO = {
   uid: "video-cafe-lumen",
@@ -21,17 +22,41 @@ export const VIDEO = {
   startingTokens: 480,
 } as const;
 
-/** The team Sam already has when the video starts; Quote Builder is hired on camera. */
-const TEAM: { agentId: string; triggerId: string; approvalMode: "ask" | "auto" }[] = [
-  { agentId: "receipthero", triggerId: "inbox", approvalMode: "ask" },
-  { agentId: "vat-reconciler", triggerId: "manual", approvalMode: "auto" },
-  { agentId: "reviewpulse", triggerId: "review-page", approvalMode: "ask" },
-  { agentId: "echosocial", triggerId: "manual", approvalMode: "ask" },
-  { agentId: "invoice-chaser", triggerId: "manual", approvalMode: "ask" },
-  { agentId: "rotabuilder", triggerId: "manual", approvalMode: "ask" },
+/** Willow & Wick: the online candle store the video follows. */
+const STORE = {
+  businessName: "Willow & Wick",
+  displayName: "Sam Patel",
+  profile: {
+    description: "Online store selling hand-poured soy candles, wax melts and gift sets, made in a small studio in Leeds and shipped across the UK. We also supply a few homeware shops wholesale.",
+    products: "Candles 300g £22–£26 (Fig & Cedar is the best seller), wax melts £9.50, Autumn gift set £48, long matches £4. Wholesale prices in our price list.",
+    audience: "People buying candles for their home or as gifts, and independent homeware shops",
+    toneOfVoice: "Warm, calm and personal, like a friend recommending a candle; never pushy",
+    avoidWords: ["luxury", "game-changer", "exclusive offer"],
+    website: "https://willow-and-wick.myshopify.com",
+    location: "Leeds, UK",
+    timeZone: "Europe/London",
+  },
+} as const;
+
+/** The team Sam already has when the video starts; Win-back is hired on camera. */
+const TEAM: { agentId: string; triggerId: string; approvalMode: "ask" | "auto"; priceList?: true }[] = [
+  { agentId: "order-desk", triggerId: "manual", approvalMode: "ask" },
+  { agentId: "inventory-guardian", triggerId: "daily-0700", approvalMode: "ask" },
+  { agentId: "revenue-pulse", triggerId: "mon-0800", approvalMode: "ask" },
+  { agentId: "quote-builder", triggerId: "manual", approvalMode: "ask", priceList: true },
+  { agentId: "receipthero", triggerId: "drive", approvalMode: "ask" },
 ];
 
-const CLEARED = ["tasks", "token_transactions", "approvals", "hires", "knowledge_sources", "style_examples", "invoice_keys", "memory", "reviews"] as const;
+/** What the team already knows about the store; the Customers fact waits for Sam's OK. */
+const FACTS: { shelf: "customers" | "money" | "stock" | "brand" | "team"; fact: string; pending?: true }[] = [
+  { shelf: "stock", fact: "Fig & Cedar is the best seller; reorder from Northern Wax Co. when fewer than 10 are left." },
+  { shelf: "money", fact: "Northern Wax Co. invoices are due 30 days after delivery." },
+  { shelf: "brand", fact: "Customer emails are signed \"Sam at Willow & Wick\" and never use exclamation marks more than once." },
+  { shelf: "team", fact: "Priya packs and ships orders Monday to Thursday; Leo answers customer emails." },
+  { shelf: "customers", fact: "Northside Interiors usually pays wholesale invoices about three weeks late.", pending: true },
+];
+
+const CLEARED = ["tasks", "token_transactions", "approvals", "hires", "knowledge_sources", "style_examples", "invoice_keys", "memory"] as const;
 
 export async function resetVideoAccount(): Promise<{ password?: string }> {
   const { FieldValue } = await import("firebase-admin/firestore");
@@ -41,9 +66,7 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   const { hireAgent } = await import("@/lib/hires");
   const { forgetAccountMemory, queueBankSync } = await import("@/lib/memory");
   const { deleteMemberships } = await import("@/lib/org");
-  const { seedDemoMemory } = await import("@/lib/users");
-  const { ensureReviewPage } = await import("@/lib/reviews");
-  const { DEMO_USER } = await import("@/data/agents");
+  const { addKnowledge } = await import("@/lib/knowledge");
   const { COLLECTIONS } = await import("@/types/firestore");
   const store = db();
   const uid = VIDEO.uid;
@@ -73,6 +96,17 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
     await Promise.all(objects.map((o) => o.delete({ ignoreNotFound: true })));
   }
 
+  // Empty the Drive invoice folder, so the take's invoices are the only ones there.
+  const { driveListInvoices } = await import("@/lib/connectors/google");
+  const { getConnection } = await import("@/lib/connectors");
+  const { accessToken } = await import("@/lib/connectors/tokens");
+  const conn = await getConnection(uid, "google");
+  const folder = conn ? await driveListInvoices(uid).catch(() => null) : null;
+  if (conn && folder?.files.length) {
+    const token = await accessToken(conn);
+    await Promise.all(folder.files.map((f) => fetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } })));
+  }
+
   // The sign-in: created once, then only its password changes if asked.
   let password: string | undefined;
   try {
@@ -84,19 +118,19 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
   } catch (err) {
     if ((err as { code?: string }).code !== "auth/user-not-found") throw err;
     password = process.env.VIDEO_PASSWORD ?? randomBytes(9).toString("base64url");
-    await adminAuth().createUser({ uid, email: VIDEO.email, password, displayName: DEMO_USER.displayName, emailVerified: true });
+    await adminAuth().createUser({ uid, email: VIDEO.email, password, displayName: STORE.displayName, emailVerified: true });
   }
 
   const userRef = store.collection(COLLECTIONS.users).doc(uid);
   const existing = await userRef.get();
   await userRef.set({
-    displayName: DEMO_USER.displayName,
+    displayName: STORE.displayName,
     email: VIDEO.email,
-    businessName: "Café Lumen",
+    businessName: STORE.businessName,
     tokenBalance: VIDEO.startingTokens,
     tokensHeld: 0,
     tokensSpent: 0,
-    businessProfile: DEMO_USER.businessProfile,
+    businessProfile: STORE.profile,
     // Not a sandbox: the daily cleanup must leave it alone.
     isDemo: false,
     createdAt: existing.exists ? existing.get("createdAt") : FieldValue.serverTimestamp(),
@@ -110,10 +144,25 @@ export async function resetVideoAccount(): Promise<{ password?: string }> {
     description: "Token pack",
     createdAt: FieldValue.serverTimestamp(),
   });
-  for (const h of TEAM) await hireAgent(uid, { ...h, knowledgeAccess: ["profile"] });
-  // Customers review Café Lumen at agentgig.si/r/cafe-lumen; ReviewPulse listens there.
-  await ensureReviewPage(uid, "cafe-lumen");
-  await seedDemoMemory(uid);
+  // The wholesale price list Quote Builder prices from.
+  const { id: priceListId } = await addKnowledge(uid, { name: "wholesale-price-list.md", mimeType: "text/markdown", data: readFileSync("fixtures/video/wholesale-price-list.md") });
+  for (const { priceList, ...h } of TEAM) await hireAgent(uid, { ...h, knowledgeAccess: priceList ? ["profile", priceListId] : ["profile"] });
+  const batch = store.batch();
+  for (const f of FACTS) {
+    batch.set(store.collection(COLLECTIONS.memory).doc(), {
+      userId: uid,
+      shelf: f.shelf,
+      fact: f.fact,
+      status: f.pending ? "pending" : "saved",
+      source: { kind: "person", uid, name: STORE.displayName },
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  await batch.commit();
+  // Partner listings registered from this account on camera are removed, so the next take can register them again.
+  const listed = await store.collection(COLLECTIONS.agents).where("ownerUid", "==", uid).get();
+  await Promise.all(listed.docs.map((d) => d.ref.delete()));
   await queueBankSync(uid);
   return { password };
 }
