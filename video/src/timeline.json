@@ -1,0 +1,1318 @@
+{
+ "total": 231.83520830599468,
+ "waitSpeed": 3,
+ "costTokens": 18,
+ "tasks": 9,
+ "pages": {
+  "web": {
+   "w": 1272,
+   "h": 992
+  },
+  "tg": {
+   "w": 636,
+   "h": 940
+  }
+ },
+ "segments": [
+  {
+   "kind": "cold",
+   "start": 0,
+   "dur": 9.244750006993613,
+   "pieces": [
+    {
+     "from": 46.79000000953674,
+     "to": 49.590000009536745,
+     "speed": 1,
+     "wait": false,
+     "outStart": 0,
+     "outDur": 2.8000000000000043
+    },
+    {
+     "from": 49.590000009536745,
+     "to": 54.61299996376037,
+     "speed": 4,
+     "wait": false,
+     "outStart": 2.8000000000000043,
+     "outDur": 1.2557499885559071
+    },
+    {
+     "from": 54.61299996376037,
+     "to": 56.61299996376037,
+     "speed": 1,
+     "wait": false,
+     "outStart": 4.055749988555911,
+     "outDur": 2
+    },
+    {
+     "from": 56.61299996376037,
+     "to": 59.58000001907349,
+     "speed": 3,
+     "wait": false,
+     "outStart": 6.055749988555911,
+     "outDur": 0.9890000184377049
+    },
+    {
+     "from": 59.58000001907349,
+     "to": 61.78000001907348,
+     "speed": 1,
+     "wait": false,
+     "outStart": 7.044750006993616,
+     "outDur": 2.1999999999999957
+    }
+   ]
+  },
+  {
+   "kind": "title",
+   "key": "01",
+   "start": 9.244750006993613,
+   "dur": 12.262145833333333
+  },
+  {
+   "kind": "scene",
+   "key": "02",
+   "start": 21.506895840326948,
+   "dur": 13.010708333333334,
+   "pieces": [
+    {
+     "from": 0.003999948501586914,
+     "to": 5.922999858856201,
+     "speed": 1,
+     "wait": false,
+     "outStart": 21.506895840326948,
+     "outDur": 5.918999910354614
+    },
+    {
+     "from": 5.922999858856201,
+     "to": 5.922999858856201,
+     "speed": 1,
+     "hold": 7.091708422978719,
+     "outStart": 27.425895750681562,
+     "outDur": 7.091708422978719
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "03",
+   "start": 34.51760417366028,
+   "dur": 16.767937500000002,
+   "pieces": [
+    {
+     "from": 5.922999858856201,
+     "to": 19.71499991416931,
+     "speed": 1,
+     "wait": false,
+     "outStart": 34.51760417366028,
+     "outDur": 13.79200005531311
+    },
+    {
+     "from": 19.71499991416931,
+     "to": 19.71499991416931,
+     "speed": 1,
+     "hold": 2.975937444686892,
+     "outStart": 48.30960422897339,
+     "outDur": 2.975937444686892
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "04",
+   "start": 51.28554167366028,
+   "dur": 13.565999984741204,
+   "pieces": [
+    {
+     "from": 19.71499991416931,
+     "to": 33.28099989891052,
+     "speed": 1,
+     "wait": false,
+     "outStart": 51.28554167366028,
+     "outDur": 13.565999984741211
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "05",
+   "start": 64.85154165840149,
+   "dur": 16.22175,
+   "pieces": [
+    {
+     "from": 33.28099989891052,
+     "to": 38.825000047683716,
+     "speed": 1,
+     "wait": false,
+     "outStart": 64.85154165840149,
+     "outDur": 5.544000148773193
+    },
+    {
+     "from": 38.825000047683716,
+     "to": 46.99000000953674,
+     "speed": 3,
+     "wait": true,
+     "outStart": 70.39554180717468,
+     "outDur": 2.7216666539510093
+    },
+    {
+     "from": 46.99000000953674,
+     "to": 53.121999979019165,
+     "speed": 1,
+     "wait": false,
+     "outStart": 73.11720846112568,
+     "outDur": 6.131999969482422
+    },
+    {
+     "from": 53.121999979019165,
+     "to": 53.121999979019165,
+     "speed": 1,
+     "hold": 1.8240832277933805,
+     "outStart": 79.2492084306081,
+     "outDur": 1.8240832277933805
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "06",
+   "start": 81.07329165840149,
+   "dur": 17.753999948501587,
+   "pieces": [
+    {
+     "from": 53.121999979019165,
+     "to": 70.87599992752075,
+     "speed": 1,
+     "wait": false,
+     "outStart": 81.07329165840149,
+     "outDur": 17.753999948501587
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "07",
+   "start": 98.82729160690307,
+   "dur": 21.833437500000002,
+   "pieces": [
+    {
+     "from": 70.87599992752075,
+     "to": 74.87599992752075,
+     "speed": 1,
+     "wait": false,
+     "outStart": 98.82729160690307,
+     "outDur": 4
+    },
+    {
+     "from": 74.87599992752075,
+     "to": 81.21499991416931,
+     "speed": 3,
+     "wait": true,
+     "outStart": 102.82729160690307,
+     "outDur": 2.11299999554952
+    },
+    {
+     "from": 81.21499991416931,
+     "to": 87.25399994850159,
+     "speed": 1,
+     "wait": false,
+     "outStart": 104.94029160245259,
+     "outDur": 6.039000034332275
+    },
+    {
+     "from": 87.25399994850159,
+     "to": 87.25399994850159,
+     "speed": 1,
+     "hold": 9.681437470118208,
+     "outStart": 110.97929163678486,
+     "outDur": 9.681437470118208
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "08",
+   "start": 120.66072910690308,
+   "dur": 32.53233337402345,
+   "pieces": [
+    {
+     "from": 87.25399994850159,
+     "to": 90.25399994850159,
+     "speed": 1,
+     "wait": false,
+     "outStart": 120.66072910690308,
+     "outDur": 3
+    },
+    {
+     "from": 90.25399994850159,
+     "to": 97.23000001907349,
+     "speed": 3,
+     "wait": true,
+     "outStart": 123.66072910690308,
+     "outDur": 2.3253333568573
+    },
+    {
+     "from": 97.23000001907349,
+     "to": 124.43700003623962,
+     "speed": 1,
+     "wait": false,
+     "outStart": 125.98606246376038,
+     "outDur": 27.207000017166138
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "09",
+   "start": 153.19306248092653,
+   "dur": 22.76900005340576,
+   "pieces": [
+    {
+     "from": 124.43700003623962,
+     "to": 127.43700003623962,
+     "speed": 1,
+     "wait": false,
+     "outStart": 153.19306248092653,
+     "outDur": 3
+    },
+    {
+     "from": 127.43700003623962,
+     "to": 130.3109998703003,
+     "speed": 3,
+     "wait": true,
+     "outStart": 156.19306248092653,
+     "outDur": 0.9579999446868896
+    },
+    {
+     "from": 130.3109998703003,
+     "to": 149.12199997901917,
+     "speed": 1,
+     "wait": false,
+     "outStart": 157.15106242561342,
+     "outDur": 18.811000108718872
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "10",
+   "start": 175.9620625343323,
+   "dur": 14.99066670735678,
+   "pieces": [
+    {
+     "from": 149.12199997901917,
+     "to": 156.12199997901917,
+     "speed": 1,
+     "wait": false,
+     "outStart": 175.9620625343323,
+     "outDur": 7
+    },
+    {
+     "from": 156.12199997901917,
+     "to": 161.70099997520447,
+     "speed": 3,
+     "wait": true,
+     "outStart": 182.9620625343323,
+     "outDur": 1.8596666653951008
+    },
+    {
+     "from": 161.70099997520447,
+     "to": 167.83200001716614,
+     "speed": 1,
+     "wait": false,
+     "outStart": 184.8217291997274,
+     "outDur": 6.13100004196167
+    }
+   ]
+  },
+  {
+   "kind": "scene",
+   "key": "11",
+   "start": 190.95272924168907,
+   "dur": 14.598999897638947,
+   "pieces": [
+    {
+     "from": 167.83200001716614,
+     "to": 170.83200001716614,
+     "speed": 1,
+     "wait": false,
+     "outStart": 190.95272924168907,
+     "outDur": 3
+    },
+    {
+     "from": 170.83200001716614,
+     "to": 172.8329999446869,
+     "speed": 3,
+     "wait": true,
+     "outStart": 193.95272924168907,
+     "outDur": 0.6669999758402506
+    },
+    {
+     "from": 172.8329999446869,
+     "to": 183.7649998664856,
+     "speed": 1,
+     "wait": false,
+     "outStart": 194.6197292175293,
+     "outDur": 10.931999921798706
+    }
+   ]
+  },
+  {
+   "kind": "arch",
+   "key": "12",
+   "start": 205.55172913932802,
+   "dur": 18.483479166666665
+  },
+  {
+   "kind": "stats",
+   "start": 224.03520830599467,
+   "dur": 3.8
+  },
+  {
+   "kind": "end",
+   "start": 227.83520830599468,
+   "dur": 4
+  }
+ ],
+ "voice": [
+  {
+   "key": "01",
+   "start": 9.644750006993613,
+   "dur": 10.862145833333333
+  },
+  {
+   "key": "02",
+   "start": 21.906895840326946,
+   "dur": 11.610708333333333
+  },
+  {
+   "key": "03",
+   "start": 34.91760417366028,
+   "dur": 15.3679375
+  },
+  {
+   "key": "04",
+   "start": 51.68554167366028,
+   "dur": 8.1219375
+  },
+  {
+   "key": "05",
+   "start": 65.2515416584015,
+   "dur": 14.82175
+  },
+  {
+   "key": "06",
+   "start": 81.4732916584015,
+   "dur": 9.586833333333333
+  },
+  {
+   "key": "07",
+   "start": 99.22729160690308,
+   "dur": 20.4334375
+  },
+  {
+   "key": "08",
+   "start": 121.06072910690308,
+   "dur": 16.458833333333335
+  },
+  {
+   "key": "09",
+   "start": 153.59306248092653,
+   "dur": 9.849979166666667
+  },
+  {
+   "key": "10",
+   "start": 176.3620625343323,
+   "dur": 7.008395833333333
+  },
+  {
+   "key": "11",
+   "start": 191.35272924168908,
+   "dur": 9.910208333333333
+  },
+  {
+   "key": "12",
+   "start": 205.95172913932802,
+   "dur": 17.483479166666665
+  }
+ ],
+ "captions": [
+  {
+   "start": 9.644750006993613,
+   "end": 15.092873206582091,
+   "text": "Every business needs a bookkeeper, a sales assistant and someone to plan the rota."
+  },
+  {
+   "start": 15.142873206582092,
+   "end": 20.456895840326947,
+   "text": "AgentGig gives you AI agents for those jobs, paid per task, working as one team."
+  },
+  {
+   "start": 21.906895840326946,
+   "end": 28.11461526673387,
+   "text": "This is Sam, who runs Café Lumen, a coffee roaster supplying offices in Manchester."
+  },
+  {
+   "start": 28.164615266733872,
+   "end": 33.467604173660284,
+   "text": "Sam's team has six agents, a token balance and a memory they all share."
+  },
+  {
+   "start": 34.91760417366028,
+   "end": 38.25643141725003,
+   "text": "Every agent works from the business itself:"
+  },
+  {
+   "start": 38.306431417250025,
+   "end": 42.90621763519874,
+   "text": "its profile, its documents, and facts the team has learned."
+  },
+  {
+   "start": 42.95621763519874,
+   "end": 45.743375327506435,
+   "text": "Sam uploads the catering price list."
+  },
+  {
+   "start": 45.79337532750643,
+   "end": 50.23554167366028,
+   "text": "Cloud DLP removes personal data before any model sees it."
+  },
+  {
+   "start": 51.68554167366028,
+   "end": 52.68953356297326,
+   "text": "Need a new skill?"
+  },
+  {
+   "start": 52.73953356297326,
+   "end": 53.18552974617937,
+   "text": "Hire it."
+  },
+  {
+   "start": 53.23552974617937,
+   "end": 55.54151161640838,
+   "text": "Quote Builder costs two tokens a task."
+  },
+  {
+   "start": 55.591511616408376,
+   "end": 59.757479173660286,
+   "text": "Sam lets it read the price list and caps its spending for the month."
+  },
+  {
+   "start": 65.2515416584015,
+   "end": 67.86015152387235,
+   "text": "Two supplier invoices land in the inbox."
+  },
+  {
+   "start": 67.91015152387234,
+   "end": 72.64564928171988,
+   "text": "A Cloud Storage event wakes ReceiptHero through Pub/Sub and Cloud Tasks."
+  },
+  {
+   "start": 72.69564928171988,
+   "end": 76.16830735346876,
+   "text": "Gemini reads each invoice, and code checks every sum."
+  },
+  {
+   "start": 76.21830735346876,
+   "end": 80.0232916584015,
+   "text": "One supplier has overcharged by thirty-eight pounds forty."
+  },
+  {
+   "start": 81.4732916584015,
+   "end": 84.8301828429745,
+   "text": "Sam is out, so the draft comes to Telegram."
+  },
+  {
+   "start": 84.88018284297449,
+   "end": 85.46402306336017,
+   "text": "One tap:"
+  },
+  {
+   "start": 85.51402306336017,
+   "end": 91.01012499173483,
+   "text": "it's logged to the spend sheet, and a correction email waits in Gmail."
+  },
+  {
+   "start": 99.22729160690308,
+   "end": 102.85831527418249,
+   "text": "Sam asks Ada, the team lead, for the VAT summary."
+  },
+  {
+   "start": 102.90831527418248,
+   "end": 108.86814983300602,
+   "text": "Ada hands it to VAT Reconciler, an agent from another company on its own server."
+  },
+  {
+   "start": 108.91814983300601,
+   "end": 114.50236973190307,
+   "text": "It receives the audited invoices over the A2A protocol, never Sam's logins."
+  },
+  {
+   "start": 114.55236973190307,
+   "end": 119.61072910690308,
+   "text": "Seventy pounds to reclaim, and the overcharged invoice is held back."
+  },
+  {
+   "start": 121.06072910690308,
+   "end": 124.6986004761977,
+   "text": "A customer wants coffee and pastries for forty people."
+  },
+  {
+   "start": 124.7486004761977,
+   "end": 131.5279919008173,
+   "text": "Quote Builder prices every line from Sam's own list, adds VAT, and saves the quote as a Gmail draft."
+  },
+  {
+   "start": 131.57799190081732,
+   "end": 137.4695624402364,
+   "text": "Sam adds a note about vegan guests, and Ada saves it to company memory for every agent."
+  },
+  {
+   "start": 153.59306248092653,
+   "end": 155.38993357467652,
+   "text": "A two-star review comes in."
+  },
+  {
+   "start": 155.43993357467653,
+   "end": 158.74166259666725,
+   "text": "ReviewPulse drafts a reply in Café Lumen's voice."
+  },
+  {
+   "start": 158.79166259666727,
+   "end": 160.72533895662096,
+   "text": "Sam rewrites it and approves."
+  },
+  {
+   "start": 160.77533895662097,
+   "end": 163.39304164759318,
+   "text": "Nothing goes out without a person's OK."
+  },
+  {
+   "start": 176.3620625343323,
+   "end": 183.32045836766562,
+   "text": "Back at the desk, RotaBuilder plans next week, and code checks every shift against availability and hours."
+  },
+  {
+   "start": 191.35272924168908,
+   "end": 194.88727268140536,
+   "text": "Everything the team did today cost eighteen tokens."
+  },
+  {
+   "start": 194.93727268140537,
+   "end": 199.80723426532973,
+   "text": "Tokens are held when work starts and charged only when it's delivered."
+  },
+  {
+   "start": 199.85723426532974,
+   "end": 201.2129375750224,
+   "text": "Failed work is free."
+  },
+  {
+   "start": 205.95172913932802,
+   "end": 219.72200314726453,
+   "text": "Under the hood, one gateway on Cloud Run runs every task through verify, reserve, scrub, ground, run and deliver, with Gemini on Vertex AI, Firestore and Memory Bank."
+  },
+  {
+   "start": 219.77200314726454,
+   "end": 220.47129511155023,
+   "text": "AgentGig:"
+  },
+  {
+   "start": 220.52129511155024,
+   "end": 223.38520830599467,
+   "text": "AI employees that work as one team."
+  }
+ ],
+ "callouts": [
+  {
+   "start": 36.01760417366028,
+   "end": 39.41760417366028,
+   "text": "Grounded in your business",
+   "sub": "Profile · files · shared memory"
+  },
+  {
+   "start": 53.28554167366028,
+   "end": 56.68554167366028,
+   "text": "Hire in a few clicks",
+   "sub": "Priced per finished task"
+  },
+  {
+   "start": 74.11720846112568,
+   "end": 77.51720846112569,
+   "text": "£38.40 overcharge caught",
+   "sub": "Gemini reads it · code checks the sums"
+  },
+  {
+   "start": 87.93129169845581,
+   "end": 91.33129169845581,
+   "text": "Approved from Sam's phone",
+   "sub": "Logged to Sheets · correction drafted in Gmail"
+  },
+  {
+   "start": 105.94029160245259,
+   "end": 109.3402916024526,
+   "text": "A partner company's agent",
+   "sub": "Handed the work over A2A, never Sam's logins"
+  },
+  {
+   "start": 126.98606246376038,
+   "end": 130.38606246376037,
+   "text": "Priced from Sam's own list",
+   "sub": "Saved as a Gmail draft"
+  },
+  {
+   "start": 149.14806240463258,
+   "end": 152.5480624046326,
+   "text": "Shared company memory",
+   "sub": "Every agent knows it now"
+  },
+  {
+   "start": 158.15106242561342,
+   "end": 161.55106242561342,
+   "text": "Nothing goes out without an OK",
+   "sub": "Approve · Edit · Skip"
+  },
+  {
+   "start": 185.8217291997274,
+   "end": 189.2217291997274,
+   "text": "Every shift checked in code",
+   "sub": "Availability and hours"
+  },
+  {
+   "start": 195.6197292175293,
+   "end": 199.01972921752932,
+   "text": "Charged only for finished work",
+   "sub": "Failed tasks are free"
+  }
+ ],
+ "sounds": [
+  {
+   "at": 1.2000000000000028,
+   "src": "ping"
+  },
+  {
+   "at": 74.11720846112568,
+   "src": "ping"
+  },
+  {
+   "at": 3.0509999632835427,
+   "src": "ping"
+  },
+  {
+   "at": 76.72120831425984,
+   "src": "ping"
+  },
+  {
+   "at": 7.4447500069936146,
+   "src": "ping"
+  },
+  {
+   "at": 87.93129169845581,
+   "src": "ping"
+  },
+  {
+   "at": 93.4922915687561,
+   "src": "ping"
+  },
+  {
+   "at": 105.94029160245259,
+   "src": "ping"
+  },
+  {
+   "at": 126.98606246376038,
+   "src": "ping"
+  },
+  {
+   "at": 135.8810624446869,
+   "src": "ping"
+  },
+  {
+   "at": 149.14806240463258,
+   "src": "ping"
+  },
+  {
+   "at": 158.15106242561342,
+   "src": "ping"
+  },
+  {
+   "at": 166.18506258392335,
+   "src": "ping"
+  },
+  {
+   "at": 171.91006248855592,
+   "src": "ping"
+  },
+  {
+   "at": 195.6197292175293,
+   "src": "ping"
+  },
+  {
+   "at": 35.580604375839236,
+   "src": "tap"
+  },
+  {
+   "at": 43.19160419845581,
+   "src": "tap"
+  },
+  {
+   "at": 51.899541755676275,
+   "src": "tap"
+  },
+  {
+   "at": 55.90954174613953,
+   "src": "tap"
+  },
+  {
+   "at": 58.345541616439824,
+   "src": "tap"
+  },
+  {
+   "at": 59.62954177474976,
+   "src": "tap"
+  },
+  {
+   "at": 60.834541698455816,
+   "src": "tap"
+  },
+  {
+   "at": 62.74954166030884,
+   "src": "tap"
+  },
+  {
+   "at": 5.255749988555914,
+   "src": "tap"
+  },
+  {
+   "at": 83.7642916431427,
+   "src": "tap"
+  },
+  {
+   "at": 90.96429169082641,
+   "src": "tap"
+  },
+  {
+   "at": 99.47529160881042,
+   "src": "tap"
+  },
+  {
+   "at": 121.19672912025452,
+   "src": "tap"
+  },
+  {
+   "at": 132.91006248855592,
+   "src": "tap"
+  },
+  {
+   "at": 139.08806246185304,
+   "src": "tap"
+  },
+  {
+   "at": 153.71706241035463,
+   "src": "tap"
+  },
+  {
+   "at": 164.45306247138979,
+   "src": "tap"
+  },
+  {
+   "at": 169.2320625152588,
+   "src": "tap"
+  },
+  {
+   "at": 180.9710625972748,
+   "src": "tap"
+  },
+  {
+   "at": 182.97806256675722,
+   "src": "tap"
+  },
+  {
+   "at": 191.46772910817467,
+   "src": "tap"
+  },
+  {
+   "at": 8.994750006993613,
+   "src": "whoosh"
+  },
+  {
+   "at": 21.256895840326948,
+   "src": "whoosh"
+  },
+  {
+   "at": 205.30172913932802,
+   "src": "whoosh"
+  },
+  {
+   "at": 223.78520830599467,
+   "src": "whoosh"
+  },
+  {
+   "at": 227.58520830599468,
+   "src": "whoosh"
+  }
+ ],
+ "events": [
+  {
+   "t": 2.3450000286102295,
+   "page": "web",
+   "kind": "move",
+   "x": 1012.2890625,
+   "y": 49.875
+  },
+  {
+   "t": 6.74399995803833,
+   "page": "web",
+   "kind": "move",
+   "x": 551.859375,
+   "y": 35.875
+  },
+  {
+   "t": 6.986000061035156,
+   "page": "web",
+   "kind": "click",
+   "x": 551.859375,
+   "y": 35.875
+  },
+  {
+   "t": 10.596999883651733,
+   "page": "web",
+   "kind": "move",
+   "x": 975.390625,
+   "y": 786.75
+  },
+  {
+   "t": 14.361000061035156,
+   "page": "web",
+   "kind": "move",
+   "x": 431.0234375,
+   "y": 35.875
+  },
+  {
+   "t": 14.596999883651733,
+   "page": "web",
+   "kind": "click",
+   "x": 431.0234375,
+   "y": 35.875
+  },
+  {
+   "t": 20.098000049591064,
+   "page": "web",
+   "kind": "move",
+   "x": 222.640625,
+   "y": 35.875
+  },
+  {
+   "t": 20.328999996185303,
+   "page": "web",
+   "kind": "click",
+   "x": 222.640625,
+   "y": 35.875
+  },
+  {
+   "t": 23.04200005531311,
+   "page": "web",
+   "kind": "move",
+   "x": 220.1640625,
+   "y": 772.25
+  },
+  {
+   "t": 24.111999988555908,
+   "page": "web",
+   "kind": "move",
+   "x": 324.03125,
+   "y": 871.75
+  },
+  {
+   "t": 24.33899998664856,
+   "page": "web",
+   "kind": "click",
+   "x": 324.03125,
+   "y": 871.75
+  },
+  {
+   "t": 26.526999950408936,
+   "page": "web",
+   "kind": "move",
+   "x": 626.734375,
+   "y": 593.65625
+  },
+  {
+   "t": 26.774999856948853,
+   "page": "web",
+   "kind": "click",
+   "x": 626.734375,
+   "y": 593.65625
+  },
+  {
+   "t": 27.829999923706055,
+   "page": "web",
+   "kind": "move",
+   "x": 628.5,
+   "y": 843.65625
+  },
+  {
+   "t": 28.05900001525879,
+   "page": "web",
+   "kind": "click",
+   "x": 628.5,
+   "y": 843.65625
+  },
+  {
+   "t": 29.03500008583069,
+   "page": "web",
+   "kind": "move",
+   "x": 477,
+   "y": 730.46875
+  },
+  {
+   "t": 29.263999938964844,
+   "page": "web",
+   "kind": "click",
+   "x": 477,
+   "y": 730.46875
+  },
+  {
+   "t": 30.943000078201294,
+   "page": "web",
+   "kind": "move",
+   "x": 776.7109375,
+   "y": 900.46875
+  },
+  {
+   "t": 31.17899990081787,
+   "page": "web",
+   "kind": "click",
+   "x": 776.7109375,
+   "y": 900.46875
+  },
+  {
+   "t": 37.388999938964844,
+   "page": "web",
+   "kind": "move",
+   "x": 726.3046875,
+   "y": 692.75
+  },
+  {
+   "t": 39.7979998588562,
+   "page": "web",
+   "kind": "move",
+   "x": 184,
+   "y": 835.25
+  },
+  {
+   "t": 47.99000000953674,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 730,
+   "w": 604,
+   "h": 148,
+   "text": "ReceiptHero\nInvoice INV-21407 is overcharged by £38.40\nThe invoice says £1,046.8"
+  },
+  {
+   "t": 50.5939998626709,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 708,
+   "w": 604,
+   "h": 163,
+   "text": "ReceiptHero\nInvoice BD-5582 checked: no problems\nBridgewater Dairy Co. · £423.36"
+  },
+  {
+   "t": 53.70899987220764,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 631
+  },
+  {
+   "t": 55.58200001716614,
+   "page": "tg",
+   "kind": "move",
+   "x": 135.5,
+   "y": 684
+  },
+  {
+   "t": 55.812999963760376,
+   "page": "tg",
+   "kind": "click",
+   "x": 135.5,
+   "y": 684
+  },
+  {
+   "t": 59.980000019073486,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 803,
+   "w": 604,
+   "h": 72,
+   "text": "Ada\nApproved. Logged to your spend sheet and drafted a correction email\n06:27"
+  },
+  {
+   "t": 62.77900004386902,
+   "page": "tg",
+   "kind": "move",
+   "x": 89.4375,
+   "y": 775
+  },
+  {
+   "t": 63.01300001144409,
+   "page": "tg",
+   "kind": "click",
+   "x": 89.4375,
+   "y": 775
+  },
+  {
+   "t": 65.54099988937378,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 820,
+   "w": 604,
+   "h": 51,
+   "text": "Ada\nApproved. Logged to your spend sheet\n06:27"
+  },
+  {
+   "t": 71.29299998283386,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 71.5239999294281,
+   "page": "tg",
+   "kind": "click",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 82.21499991416931,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 786,
+   "w": 604,
+   "h": 87,
+   "text": "VAT Reconciler\nResult saved in AgentGig\nGBP 70.56 VAT to reclaim from 1 invoice("
+  },
+  {
+   "t": 87.54999995231628,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 87.78999996185303,
+   "page": "tg",
+   "kind": "click",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 98.23000001907349,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 709,
+   "w": 604,
+   "h": 166,
+   "text": "Quote Builder\nQuote Q-8O2J2Q ready: GBP 498.00 inc. VAT\n1 × Coffee cart with bar"
+  },
+  {
+   "t": 101.00699996948242,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 788
+  },
+  {
+   "t": 103.91799998283386,
+   "page": "tg",
+   "kind": "move",
+   "x": 95.3359375,
+   "y": 851
+  },
+  {
+   "t": 104.15400004386902,
+   "page": "tg",
+   "kind": "click",
+   "x": 95.3359375,
+   "y": 851
+  },
+  {
+   "t": 107.125,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 808,
+   "w": 604,
+   "h": 63,
+   "text": "Ada\nApproved. Quote saved as a draft in Gmail. Nothing was sent.\n06:28"
+  },
+  {
+   "t": 110.09599995613098,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 110.33200001716614,
+   "page": "tg",
+   "kind": "click",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 120.39199995994568,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 799,
+   "w": 604,
+   "h": 72,
+   "text": "Ada\nGot it. I've saved that Brightwell Studio has a few vegans and vegan pastrie"
+  },
+  {
+   "t": 124.72699999809265,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 124.96099996566772,
+   "page": "tg",
+   "kind": "click",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 131.3109998703003,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 705,
+   "w": 604,
+   "h": 166,
+   "text": "ReviewPulse\n2-star review needs attention\n“Hi Tom, thanks for your feedback! We'"
+  },
+  {
+   "t": 134.106999874115,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 788
+  },
+  {
+   "t": 137.385999917984,
+   "page": "tg",
+   "kind": "move",
+   "x": 256.0078125,
+   "y": 851
+  },
+  {
+   "t": 137.61299991607666,
+   "page": "tg",
+   "kind": "click",
+   "x": 256.0078125,
+   "y": 851
+  },
+  {
+   "t": 139.34500002861023,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 820,
+   "w": 604,
+   "h": 51,
+   "text": "Ada\nSend me the new text and I'll send that version instead.\n06:28"
+  },
+  {
+   "t": 142.16599988937378,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 142.39199995994568,
+   "page": "tg",
+   "kind": "click",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 145.0699999332428,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 799,
+   "w": 604,
+   "h": 72,
+   "text": "Ada\nSent your version. Reply approved. Paste it into Google: it's in the result "
+  },
+  {
+   "t": 153.89599990844727,
+   "page": "web",
+   "kind": "move",
+   "x": 800.5,
+   "y": 645.75
+  },
+  {
+   "t": 154.13100004196167,
+   "page": "web",
+   "kind": "click",
+   "x": 800.5,
+   "y": 645.75
+  },
+  {
+   "t": 155.93700003623962,
+   "page": "web",
+   "kind": "move",
+   "x": 1131.015625,
+   "y": 877.75
+  },
+  {
+   "t": 156.17000007629395,
+   "page": "web",
+   "kind": "click",
+   "x": 1131.015625,
+   "y": 877.75
+  },
+  {
+   "t": 168.10999989509583,
+   "page": "tg",
+   "kind": "move",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 168.34699988365173,
+   "page": "tg",
+   "kind": "click",
+   "x": 318,
+   "y": 901
+  },
+  {
+   "t": 173.8329999446869,
+   "page": "tg",
+   "kind": "message",
+   "x": 16,
+   "y": 849,
+   "w": 604,
+   "h": 51,
+   "text": "Ada\nToday's tasks cost 18 tokens.\n06:29"
+  },
+  {
+   "t": 180.760999917984,
+   "page": "web",
+   "kind": "move",
+   "x": 1012.2890625,
+   "y": 49.875
+  }
+ ],
+ "musicSeconds": 241.14601041666666
+}

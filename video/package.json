@@ -1,0 +1,20 @@
+{
+  "name": "agentgig-video",
+  "private": true,
+  "description": "The demo video, composed with Remotion from a recorded take (see scripts/video-record.ts).",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Demo out/agentgig-demo.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.290",
+    "@remotion/google-fonts": "4.0.290",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.290"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}

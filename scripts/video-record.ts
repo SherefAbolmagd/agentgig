@@ -29,6 +29,10 @@ mkdirSync(OUT, { recursive: true });
 
 const T0 = Date.now() / 1000;
 const marks: { t: number; label: string }[] = [];
+/** Where the action is, for the edit's camera: pointer stops, clicks and new chat messages, in page pixels. */
+type Focus = { t: number; page: "web" | "tg"; kind: "move" | "click" | "message"; x: number; y: number; w?: number; h?: number; text?: string };
+const events: Focus[] = [];
+const now = () => Date.now() / 1000 - T0;
 const mark = (label: string) => {
   const t = Date.now() / 1000 - T0;
   marks.push({ t, label });
@@ -175,7 +179,7 @@ const POINTER = `(() => {
 class Person {
   x = 640;
   y = 540;
-  constructor(public page: Page) {}
+  constructor(public page: Page, public name: "web" | "tg" = "web") {}
   async setup() {
     await this.page.addInitScript(POINTER);
   }
@@ -194,6 +198,7 @@ class Person {
     }
     this.x = x;
     this.y = y;
+    events.push({ t: now(), page: this.name, kind: "move", x, y });
   }
   async point(target: Locator) {
     await target.scrollIntoViewIfNeeded();
@@ -209,6 +214,7 @@ class Person {
     // the click itself goes to the element where it is now, not where it was.
     const box = await target.boundingBox().catch(() => null);
     if (box) [this.x, this.y] = [box.x + box.width / 2, box.y + box.height / 2];
+    events.push({ t: now(), page: this.name, kind: "click", x: this.x, y: this.y });
     try {
       await target.click({ delay: 60, timeout: 3000 });
     } catch {
@@ -278,6 +284,8 @@ class Telegram {
       await this.page.waitForTimeout(400);
     }
     const bubble = all.last();
+    const box = await bubble.boundingBox().catch(() => null);
+    if (box) events.push({ t: now(), page: "tg", kind: "message", x: box.x, y: box.y, w: box.width, h: box.height, text: (await bubble.innerText().catch(() => "")).slice(0, 80) });
     await bubble.scrollIntoViewIfNeeded().catch(() => undefined);
     // Let Ada's follow-up land too, so the next message doesn't cut in.
     await this.page.waitForTimeout(2500);
@@ -345,7 +353,7 @@ async function main() {
   if (TG_PROFILE) {
     tgCtx = await chromium.launchPersistentContext(TG_PROFILE, { headless, ...quiet, args: [...smooth, ...tgWindow], ...view(640), locale: "en-GB", timezoneId: "Europe/London" });
     const p = tgCtx.pages()[0] ?? (await tgCtx.newPage());
-    tg = new Telegram(new Person(p));
+    tg = new Telegram(new Person(p, "tg"));
     await tg.me.setup();
     await tg.prepare();
     if (process.env.TG_PREP_ONLY === "1") {
@@ -564,6 +572,9 @@ async function main() {
     // Marks are relative to the recording's first frame.
     const shift = capture?.startedAt ?? 0;
     writeFileSync(`${OUT}/marks.json`, JSON.stringify(marks.map((m) => ({ ...m, t: m.t - shift })), null, 2));
+    writeFileSync(`${OUT}/events.json`, JSON.stringify(events.map((e) => ({ ...e, t: e.t - shift })), null, 2));
+    // The page crops inside raw.mp4's source, for the edit to cut them out separately.
+    if (capture) writeFileSync(`${OUT}/layout.json`, JSON.stringify({ pages: rects }, null, 2));
     console.log("Encoding…");
     const raw = `${OUT}/raw.mp4`;
 
