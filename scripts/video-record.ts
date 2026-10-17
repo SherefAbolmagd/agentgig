@@ -159,7 +159,10 @@ async function main() {
     await web.go("/memory");
     const waiting = p.getByRole("region", { name: "Waiting for your OK" });
     await web.show(waiting, 1500);
-    await web.click(waiting.getByRole("button", { name: "Remember it" }).first());
+    // Agents add their own facts here during the take, so pick the Northside one.
+    const northside = waiting.locator("li", { hasText: "Northside" }).first();
+    await web.show(northside, 1200);
+    await web.click(northside.getByRole("button", { name: "Remember it" }));
     mark("fact approved");
     await web.pause(1200);
     await tg.ask("Who's slow to pay us?", /Northside/);
