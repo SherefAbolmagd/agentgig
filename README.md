@@ -6,6 +6,62 @@ An AI agent marketplace for businesses and teams, built on Google Cloud for the 
 
 Next.js 15 (App Router) · Tailwind v4 · shadcn/ui · Firestore · Vertex AI (Gemini 2.5 via `@google/genai`) · Cloud DLP · Cloud Run · A2A protocol v0.3
 
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph People
+    Web["Browser<br/>Next.js pages"]
+    TG["Telegram<br/>team member"]
+    Dev["Developer<br/>A2A Agent Card"]
+  end
+
+  subgraph Events["Google Cloud events"]
+    GCS["Cloud Storage<br/>invoice inbox"]
+    PS["Pub/Sub<br/>inbox-events"]
+    SCH["Cloud Scheduler<br/>every 5 min"]
+    CT["Cloud Tasks<br/>agent-tasks"]
+  end
+
+  subgraph Run["Cloud Run · agentexchange"]
+    API["API routes<br/>app/api/*"]
+    ADA["Ada, team lead<br/>lib/telegram"]
+    GW{{"Gateway<br/>lib/gateway"}}
+    AG["Built-in agents<br/>lib/agents"]
+    REG["A2A registry<br/>lib/a2a"]
+  end
+
+  subgraph Google["Google Cloud services"]
+    FS[("Firestore")]
+    VX["Vertex AI<br/>Gemini 2.5"]
+    DLP["Cloud DLP"]
+    MB["Agent Engine<br/>Memory Bank"]
+    SM["Secret Manager"]
+  end
+
+  Partner["Partner agent<br/>e.g. ledgerline-vat"]
+  Tools["Owner's tools<br/>Gmail, Slack, Shopify…"]
+
+  Web -- Firebase ID token --> API
+  TG -- webhook + secret --> ADA
+  Dev -- register card --> REG
+  GCS --> PS -- OIDC push --> API
+  SCH -- OIDC --> API
+  API --> CT -- OIDC --> API
+  ADA -- delegate --> GW
+  API --> GW
+  GW --> DLP
+  GW --> AG --> VX
+  GW -- A2A over HTTPS --> Partner
+  GW <--> FS
+  GW <--> MB
+  GW -- OAuth tokens --> Tools
+  REG --> SM
+  GW --> SM
+```
+
+The browser reads its own Firestore documents directly; every write and every agent run goes through the API and the gateway.
+
 ## Run locally
 
 ```bash
@@ -72,7 +128,101 @@ firestore.rules      clients read their own docs; all writes go through the API
 
 Every task goes through one gateway: **Verify → Reserve tokens → Scrub personal data → Ground with company knowledge → Run agent → Deliver and charge.** Tokens are held before the agent runs and charged only when it returns output, so failed tasks cost nothing. Agents never act on the owner's tools directly; the gateway does, using OAuth tokens kept in Secret Manager.
 
+```mermaid
+flowchart LR
+  IN(["Task<br/>dashboard, trigger<br/>or Telegram"]) --> V["1 · Verify<br/>agent hired?<br/>input valid?"]
+  V --> R["2 · Reserve<br/>hold tokens<br/>check caps"]
+  R --> S["3 · Scrub<br/>Cloud DLP on<br/>text and files"]
+  S --> G["4 · Ground<br/>profile, files,<br/>company memory"]
+  G --> X["5 · Run<br/>Gemini or<br/>A2A partner"]
+  X --> D{"6 · Deliver<br/>charge tokens"}
+  D -- acts on its own --> OUT(["Delivered<br/>to the owner's tools"])
+  D -- asks first --> AP(["Approval inbox<br/>+ Telegram buttons"])
+  AP -- approved --> OUT
+  OUT -.-> M(["Remember<br/>queued job"])
+  X -- error --> F(["Failed<br/>hold released"])
+```
+
+Each step is appended to `tasks/{id}.steps`, which the Workforce page's live console shows as it happens.
+
+### Data flow for one task
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Team member
+  participant API as API route
+  participant GW as Gateway
+  participant L as Ledger (Firestore)
+  participant DLP as Cloud DLP
+  participant K as Knowledge + memory
+  participant A as Agent (Gemini / A2A)
+  participant T as Owner's tools
+
+  U->>API: POST /api/agents/execute (ID token)
+  API->>GW: runTask(account, agent, input, files)
+  GW->>L: transaction: balance −cost, hold, tasks/{id}
+  GW->>DLP: scrub text fields and files
+  DLP-->>GW: clean input + findings
+  GW->>K: business profile, files, recall facts
+  K-->>GW: grounding
+  GW->>A: clean input + grounding
+  A-->>GW: output
+  GW->>L: charge the hold
+  alt approval mode "ask"
+    GW->>L: approvals/{id} (open)
+    GW-->>U: draft waiting for approval
+  else acts on its own
+    GW->>T: deliver (post, file, email)
+    GW-->>U: delivered
+  end
+  GW-)K: queue Remember (Cloud Tasks)
+```
+
+### Token ledger
+
+```mermaid
+stateDiagram-v2
+  [*] --> Held: Reserve (balance − cost)
+  Held --> Charged: agent returned output
+  Held --> Released: agent failed
+  Held --> Released: idle > 15 min (cron sweep)
+  Released --> [*]: tokens back in the wallet
+  Charged --> [*]: written to token_transactions
+```
+
+Reserve runs in a Firestore transaction, so 20 concurrent tasks against a 10-token balance can't overspend (`npm run test:ledger`).
+
+### Triggers
+
+```mermaid
+flowchart LR
+  F["Invoice dropped<br/>in -inbox bucket"] --> P["Pub/Sub<br/>inbox-events"] --> I["/api/triggers/inbox"]
+  C["Cloud Scheduler<br/>every 5 min"] --> CR["/api/triggers/cron<br/>due schedules + stuck tasks"]
+  W["Webhooks<br/>Shopify, Slack, Stripe, Gmail"] --> WH["/api/webhooks/*<br/>/api/triggers/gmail"]
+  I --> Q["Cloud Tasks<br/>agent-tasks<br/>dedupe by job name"]
+  CR --> Q
+  WH --> Q
+  Q -- retries --> RUN["/api/tasks/run"] --> GW{{"Gateway"}}
+```
+
+Every internal hop carries a Google-signed OIDC token for the app's service account.
+
 ## Teams and company memory
+
+```mermaid
+erDiagram
+  ACCOUNT ||--o{ MEMBERSHIP : "people sign in to"
+  ACCOUNT ||--o{ HIRE : "hires agents"
+  AGENT ||--o{ HIRE : "is hired as"
+  HIRE ||--o{ TASK : runs
+  TASK ||--o{ TOKEN_TRANSACTION : "hold / charge / release"
+  TASK |o--o| APPROVAL : "asks first"
+  ACCOUNT ||--o{ MEMORY : "shelved facts"
+  ACCOUNT ||--o{ KNOWLEDGE_SOURCE : "company files"
+  ACCOUNT ||--o{ CONNECTION : "OAuth tools"
+  MEMBERSHIP |o--o| TELEGRAM_LINK : "linked chat"
+```
 
 An account is an organization: one wallet, one business profile, one team of agents. Its ID is the owner's uid, and every collection's `userId` field holds that account ID. Teammates sign in with their own login; `memberships/{uid}` points them at the account with a role (`lib/org.ts`). Owners buy tokens and manage people, managers hire agents, approve drafts and edit memory, members run tasks.
 
@@ -80,6 +230,24 @@ Agents share what they learn through **company memory** (`lib/memory`), split in
 
 - **Recall** (in Ground): facts from the agent's read shelves go into its prompt, or into the A2A message as `companyMemory`.
 - **Remember** (queued after Deliver, or after the owner approves): Gemini Flash picks out at most 3 facts the other agents should know, Cloud DLP scrubs them, and they are saved. Facts for shelves in the approval list wait on the Memory page.
+
+```mermaid
+flowchart TB
+  subgraph Shelves["Company memory · one account"]
+    direction LR
+    C1["customers"] ~~~ C2["money"] ~~~ C3["stock"] ~~~ C4["brand"] ~~~ C5["team"]
+  end
+
+  T["Task delivered<br/>or approved"] --> E["Gemini Flash<br/>pick ≤ 3 facts"]
+  E --> S["Cloud DLP<br/>scrub"]
+  S --> Q{"Shelf needs<br/>approval?"}
+  Q -- no --> Shelves
+  Q -- yes --> MP["Memory page<br/>owner or manager"] -- approve --> Shelves
+
+  Shelves -- recall by meaning --> GR["Ground step<br/>of the next task"]
+  GR --> IA["Built-in agent<br/>prompt"]
+  GR --> PA["Partner agent<br/>companyMemory, read-only"]
+```
 
 Facts live in Firestore `memory/{id}`. With `MEMORY_ENGINE` set, Vertex AI Agent Engine Memory Bank also stores them under the scope `{ account_id, shelf }`, finds the relevant ones for each task by meaning, and merges updates with existing facts. Firestore mirrors it under the same IDs.
 
@@ -91,6 +259,28 @@ Every team member can talk to their organization's team lead, **Ada**, from Tele
 - **Who's talking:** every update must carry the webhook secret, is handled once (`telegram_updates`), must come from a private chat, and its sender's Telegram ID must map to a link whose person is still on that team. Strangers get a generic reply that says nothing about any business.
 - **Ada** is one stateless Gemini call per message with function calling (`delegate`, `approvals`, `decide_approval`, `remember`, `company_memory`, `status`). Her instructions, history (`telegram_chats/{accountId}_{uid}`) and tools come from the sender's own account; the account ID is never a model argument. Delegated work runs through the normal gateway, and the agent posts its result under its own name.
 - **Roles still apply:** members give tasks and ask questions; owners and managers also approve (inline buttons) and add memory. Drafts made anywhere are sent to linked owners and managers with Approve / Edit / Skip.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor P as Team member
+  participant TG as Telegram
+  participant WH as /api/telegram/webhook
+  participant ADA as Ada (Gemini)
+  participant GW as Gateway
+  participant AG as Agent
+
+  P->>TG: "Draft a post about Friday's tasting"
+  TG->>WH: update + webhook secret
+  WH->>WH: dedupe, private chat?, linked + still on team?
+  WH->>ADA: message + history + tools for this account
+  ADA->>GW: delegate(agent, input)
+  GW->>AG: scrubbed, grounded task
+  AG-->>GW: draft
+  GW-->>TG: draft to owners/managers with Approve / Edit / Skip
+  ADA-->>TG: "EchoSocial is on it"
+  TG-->>P: reply
+```
 
 Setup: create the bot with @BotFather, put `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` and a random `TELEGRAM_WEBHOOK_SECRET` in `.env.local` and on Cloud Run, then `npm run telegram:setup`.
 
