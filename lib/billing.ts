@@ -7,7 +7,7 @@ import { topUp } from "./ledger";
 /**
  * Token bundles paid with Stripe Checkout. Tokens are credited only by the
  * signed webhook (never by the browser's return), once per Checkout Session.
- * Without STRIPE_SECRET_KEY the app falls back to free demo top-ups.
+ * Card payments are the only way to add tokens; without STRIPE_SECRET_KEY nobody can buy any.
  */
 
 export const BUNDLES = {

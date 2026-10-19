@@ -20,8 +20,8 @@ export const LIMITS = {
   sandboxGlobal: { limit: 500, windowSec: 86_400 },
   /** Agent tasks per user. */
   tasksPerUser: { limit: 40, windowSec: 600 },
-  /** Simulated top-ups per user; in production this is replaced by real payments. */
-  topupsPerUser: { limit: 3, windowSec: 86_400 },
+  /** Stripe Checkout pages opened per account. */
+  checkoutsPerUser: { limit: 10, windowSec: 3600 },
   /** Knowledge and inbox uploads per user. */
   uploadsPerUser: { limit: 40, windowSec: 3600 },
   /** Agent registrations per developer (each sends a test task). */
@@ -40,7 +40,7 @@ const MESSAGES: Record<LimitName, string> = {
   sandboxPerIp: "Too many demo sandboxes from your network. Try again in an hour, or create a free account.",
   sandboxGlobal: "The demo is very busy today. Create a free account to keep going.",
   tasksPerUser: "Your team is running a lot of tasks at once. Wait a few minutes and try again.",
-  topupsPerUser: "You've reached today's limit for demo top-ups.",
+  checkoutsPerUser: "Too many checkout attempts. Try again in an hour.",
   uploadsPerUser: "Too many uploads in the last hour. Try again later.",
   registrationsPerUser: "Too many registration attempts. Try again in an hour.",
   telegramPerUser: "You're sending messages faster than your team can keep up. Give it a few minutes.",

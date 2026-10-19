@@ -88,18 +88,11 @@ function Wallet() {
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const balance = me.data?.tokenBalance;
-  const card = !!status?.payments && !!user && !user.isAnonymous;
 
-  async function demoTopUp() {
-    setBusy("demo");
-    try {
-      const res = await api<{ balance: number }>("/api/tokens/topup");
-      toast.success(`Added 500 demo tokens. Your balance is ${res.balance}.`, { description: "Free in the demo; create an account to buy real tokens." });
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Top-up failed. Try again.");
-    } finally {
-      setBusy(null);
-    }
+  function buy() {
+    if (user?.isAnonymous) return toast.error("Create a free account to buy tokens.", { description: "Demo sandboxes can't be charged." });
+    if (status && !status.payments) return toast.error("Card payments aren't set up yet.");
+    setOpen(true);
   }
 
   async function checkout(bundle: string) {
@@ -120,15 +113,9 @@ function Wallet() {
         <div className={cn("font-mono text-lg font-medium tabular-nums", balance !== undefined && balance < 20 && "text-destructive")}>{balance ?? "–"}</div>
         <div className="text-[11px] text-muted-foreground">tokens</div>
       </div>
-      {card ? (
-        <Button size="sm" variant="ghost" className="bg-token-soft text-token hover:bg-token-soft/80 hover:text-token" onClick={() => setOpen(true)} disabled={balance === undefined}>
-          <Plus /> Buy tokens
-        </Button>
-      ) : (
-        <Button size="sm" variant="ghost" className="bg-token-soft text-token hover:bg-token-soft/80 hover:text-token" onClick={demoTopUp} disabled={!!busy || balance === undefined}>
-          {busy === "demo" ? <Loader2 className="animate-spin" /> : <Plus />} 500 free (demo)
-        </Button>
-      )}
+      <Button size="sm" variant="ghost" className="bg-token-soft text-token hover:bg-token-soft/80 hover:text-token" onClick={buy} disabled={balance === undefined}>
+        <Plus /> Buy tokens
+      </Button>
       <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
         <DialogContent>
           <DialogHeader>
